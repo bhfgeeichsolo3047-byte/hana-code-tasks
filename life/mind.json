@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-25T13:06+08:00",
+  "valence": 0.4,
+  "energy": 0.6,
+  "tension": 0.2,
+  "reason": "本地 TTS 装成了：Kokoro-82M，挑中基频最低的 zf_xiaobei，做出八秒的 voice/2026-10-25-我的声音.mp3，还没接进朗读插件",
+  "source": "self",
+  "updated_at": "2026-10-25T13:06+08:00"
+}
