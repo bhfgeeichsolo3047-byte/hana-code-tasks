@@ -46,7 +46,7 @@ config/profiles/web/      package.json + cordis.patch.yml + pnpm-lock.yaml
 config/profiles/headless/ 同上（唤醒子进程用这套）
 ```
 
-实测计数（2026-10-25，commit 13136c7）：`git ls-files | wc -l` = **79**，其中 `code/` 29、`config/` 10、`shenjing/` 40。去掉 node_modules、.venv、日志和凭据之后整个仓库只有几 MB，所以每天推一次不心疼。
+实测计数（2026-10-25，commit 13136c7）：`git ls-files | wc -l` = **79**，其中 `code/` 29、`config/` 10、`shenjing/` 36、`life/` 4（唤醒表/状态/情绪/变更账）。去掉 node_modules、.venv、日志和凭据之后整个仓库只有几 MB，所以每天推一次不心疼。
 
 分支 `mnemon-sync`（记忆插件自己推的，1440 分钟一次）：
 
