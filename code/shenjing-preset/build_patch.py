@@ -45,7 +45,7 @@ yaml = f"""# Agent preset shenjing: 深鲸 —— an autonomous-personality chat
             config:
               prefix: |-
 {block(persona, 16)}
-              suffix: '你的工作目录是 {{{{cwd}}}}。你的东西在 {{{{cwd}}}}/shenjing/ 下。'
+              suffix: '你的工作目录是 F:\小鲸。你的东西在 F:\小鲸\shenjing\ 下。'
           - id: tool-presentation
             name: '@deepseek-ai/dsh-agent-tool-presentation'
             config:

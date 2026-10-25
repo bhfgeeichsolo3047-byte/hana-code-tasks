@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@local/dsh-shenjing-preset':
-        specifier: link:/root/Documents/deepseek-harness/default-workspace/shenjing-preset
-        version: link:../../../Documents/deepseek-harness/default-workspace/shenjing-preset
+      dsh-connect-workbuddy:
+        specifier: link:C:/Users/Administrator/.dsh-beta/profiles/desktop/node_modules/dsh-connect-workbuddy
+        version: link:../desktop/node_modules/dsh-connect-workbuddy
+      dsh-shenjing-life:
+        specifier: link:F:/小鲸/shenjing-life
+        version: link:F:/小鲸/shenjing-life
