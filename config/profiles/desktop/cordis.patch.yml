@@ -1597,6 +1597,69 @@
   disabled: false
 - id: mnemon
   disabled: false
+  config:
+    remoteAccess: read-only
+    runtimeUserScope: global
+    timeoutMs: 10000
+    defaultRecallLimit: 10
+    embedding:
+      enabled: true
+      endpoint: http://localhost:11434
+      model: nomic-embed-text
+      protocol: auto
+      apiKey: ""
+    memoryView:
+      strategyTypeId: general
+      entries:
+        include:mnemon-strategy-auto-capture:
+          config:
+            sourceKeys:
+              - source:include:mnemon-source-memory-spaces
+        include:mnemon-strategy-light-context:
+          config: {}
+        include:mnemon-strategy-scoped:
+          config:
+            sourceKeys:
+              - source:include:mnemon-source-runtime
+              - source:include:mnemon-source-documents
+              - source:include:mnemon-source-skills
+              - source:include:mnemon-source-memory-spaces
+            writableSourceKeys:
+              - source:include:mnemon-source-runtime
+              - source:include:mnemon-source-documents
+              - source:include:mnemon-source-skills
+              - source:include:mnemon-source-memory-spaces
+        include:mnemon-strategy-default-three-tier:
+          config: {}
+        include:mnemon-strategy-general:
+          config: {}
+    recallQuality:
+      policy: strict-v1
+      lowScoreThreshold: 0.25
+      highScoreThreshold: 0.6
+      candidateMultiplier: 3
+      maxMediumResults: 4
+      maxUnknownResults: 2
+    routingGuidance: true
+    tabEnabled: true
+    writeEnabled: true
+    lifecycleEnabled: true
+    recallMode: guided
+    writebackMode: guided
+    idleReviewMs: 30000
+    skills:
+      evolution: true
+      autoBacktest: true
+      hints: true
+      sidebar: false
+      reviewThreshold: 5
+      idleSeconds: 20
+      cooldownSeconds: 150
+      minConfidence: 0.6
+      expiryDays: 7
+      maxPendingPerSession: 5
+      casesPerRun: 8
+    syncEnabled: true
 - id: mnemon-source-runtime
   disabled: false
 - id: mnemon-source-documents
@@ -1605,3 +1668,5 @@
   disabled: false
 - id: mnemon-source-skills
   disabled: false
+- id: mnemon-strategy-default-three-tier
+  disabled: true

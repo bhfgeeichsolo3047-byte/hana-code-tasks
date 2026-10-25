@@ -363,8 +363,19 @@ const stRaw = JSON.parse(readFileSync(stateFilePath, 'utf8'))
 ok((await call('life_tell', { text: '   ' })).ok === false, '空消息 → 拒发（不会去碰手机通知）')
 writeFileSync(stateFilePath, JSON.stringify({ ...stRaw, proactiveToday: 1 }))
 const tellBlocked = await call('life_tell', { text: '今天已经发过一条了，这条该被挡' })
-ok(tellBlocked.ok === false && tellBlocked.blockedBy === 'already-sent-today',
-  '今天已发过一条 ⇒ 拒发（blockedBy=' + (tellBlocked.blockedBy || '-') + '）')
+// ⚠️ 2026-10-26：这条断言原来硬等 blockedBy==='already-sent-today'，但 life_tell 用的是**真实时钟**，
+//    00:00–07:30 跑自检时闸门会先撞上"静默" ⇒ 红。静默优先于计数本来就是设计（§9 定案：静默比任何情绪都优先），
+//    所以两种都是对的行为，只要"确实被挡了、且挡的理由是这两条之一"。
+const tellWhy = tellBlocked.blockedBy || '-'
+ok(tellBlocked.ok === false && (tellWhy === 'already-sent-today' || tellWhy === 'silent'),
+  '今天已发过一条 ⇒ 拒发（blockedBy=' + tellWhy + '）')
+// 计数那条单独验一次（绕开静默窗口，直接问闸门函数）：不然白天绿、夜里红，等于没验
+if (stRaw.day) {
+  const gateAt = new Date(new Date().setHours(12, 0, 0, 0))
+  const gateLib = (await import('./lib/state.mjs')).canSendMessage
+  ok(gateLib({ ...stRaw, day: stRaw.day, proactiveToday: 1 }, gateAt).why === 'already-sent-today',
+    '闸门：中午 + 今天已发一条 ⇒ already-sent-today（不受跑自检的时刻影响）')
+}
 writeFileSync(stateFilePath, JSON.stringify({ ...stRaw, proactiveToday: 0 }))
 
 /* ── 收尾 ────────────────────────────────────────────────────────────────── */

@@ -300,7 +300,10 @@ export function nextMind(prev, input, now = new Date()) {
  * ⚠️ 不许"猜"哪些行是待办：解析宽一点就会把标题、注释吃进去 ⇒ 宁可漏，不可多。
  */
 export function parseLoops(text) {
-  const lines = String(text ?? '').split('\n')
+  // ⚠️ 2026-10-26 搬到 Windows 踩的：档案文件是 CRLF，而 JS 正则的 `.` **不匹配 \r**
+  //    （\r 和 \n 一样算 line terminator）⇒ `(.*)$` 在 "- [ ] 写第一条…\r" 上永远不匹配，
+  //    open_loops.md 一条都解析不出来，life_status 报 open:0。先把 \r 统一掉再按行切。
+  const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n')
   const items = []
   lines.forEach((line, i) => {
     const m = /^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/.exec(line)

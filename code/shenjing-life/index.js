@@ -30,7 +30,7 @@ const hostDeps = await loadHostDeps()
 const defineTool = hostDeps.defineTool
 
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -456,21 +456,24 @@ export function apply(ctx, config) {
   /* 备份看守（daemon.sh）不在就拉起来。
    * 为什么需要这一步：看守是 setsid 脱离宿主跑的后台进程，容器重启就没了。
    * 而唤醒子进程每次都是**新 node 进程**、会重新读盘上的代码 —— 所以由它们来续命最可靠。
-   * dsh web 主进程里模块是缓存的，这里改了什么它看不到，别指望它。 */
+   * dsh web 主进程里模块是缓存的，这里改了什么它看不到，别指望它。
+   *
+   * ⚠️ 2026-10-26 Windows 上的坑：原来读 daemon.pid 再 `process.kill(pid, 0)` 探活。
+   *    Git Bash 里 `$$` 是 MSYS 自己的编号，跟 Windows PID 是两套 —— 探活永远失败，
+   *    于是每分钟补一个看守，一分钟堆出六个。改成看**心跳文件**的 mtime：
+   *    谁在跑谁就每 60 秒写一次时间戳，探活变成"这文件多久没动了"，跟 PID 编号无关。
+   */
   const ensureBackupDaemon = () => {
     try {
-      const pidFile = join(syncHome, 'daemon.pid')
-      let pid = 0
-      try { pid = Number(String(readFileSync(pidFile, 'utf8')).trim()) || 0 } catch { pid = 0 }
-      if (pid) {
-        // Windows 没有 /proc：用 kill(pid, 0) 探活（EPERM 也算活着）
-        try { process.kill(pid, 0); return } catch (e) { if (String(e?.code) === 'EPERM') return }
-      }
       if (!existsSync(join(syncHome, 'daemon.sh'))) return
+      const beatFile = join(syncHome, 'daemon.heartbeat')
+      let ageSec = Infinity
+      try { ageSec = (Date.now() - statSync(beatFile).mtimeMs) / 1000 } catch { ageSec = Infinity }
+      if (Number.isFinite(ageSec) && ageSec < 180) return   // 3 分钟内心跳动过 ⇒ 活着，不重复起
       const c = spawn(bashBin, [join(syncHome, 'daemon.sh')], { stdio: 'ignore', detached: true })
       c.on('error', () => {})
       try { c.unref() } catch {}
-      logLine('备份看守不在，已重新拉起')
+      logLine('备份看守不在（心跳 ' + (Number.isFinite(ageSec) ? Math.round(ageSec) + 's 前' : '从来没有') + '），已重新拉起')
     } catch { /* 兜住，绝不影响主流程 */ }
   }
   ensureBackupDaemon()
