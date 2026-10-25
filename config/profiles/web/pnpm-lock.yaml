@@ -44,12 +44,18 @@ importers:
       dsh-computer-use-android:
         specifier: link:/root/dsha-computer-use-android
         version: link:../../../dsha-computer-use-android
+      dsh-deepread:
+        specifier: ^1.0.1
+        version: 1.0.1(@deepseek-ai/schemastery@3.18.5)(zod@4.6.7)
       dsh-device-shell-guide:
         specifier: link:/root/dsha-device-shell-guide
         version: link:../../../dsha-device-shell-guide
       dsh-emoji:
         specifier: ^0.3.6
         version: 0.3.6(@deepseek-ai/dsh-home-paths@0.2.0-rc.2)(@deepseek-ai/schemastery@3.18.5)
+      dsh-meme:
+        specifier: ^0.1.62
+        version: 0.1.62
       dsh-mnemon:
         specifier: ^0.5.34
         version: 0.5.34
@@ -284,6 +290,17 @@ packages:
       react-dom:
         optional: true
 
+  dsh-deepread@1.0.1:
+    resolution: {integrity: sha512-DOF1Pt5etZaSGnOp5cSJTa6tXHIP/UHiJ1Q0PGW/CZ6wr29XH0jfdzwgFMVcgfAWJwvVRF+C1JB/XDZV4VDeAQ==}
+    engines: {node: ^22.19 || >=24}
+    peerDependencies:
+      '@deepseek-ai/cordis': '*'
+      '@deepseek-ai/dsh-storage-domain': '*'
+      '@deepseek-ai/dsh-tools': 0.2.0-rc.2
+      '@deepseek-ai/schemastery': '*'
+      react: ^18.2.0
+      zod: '*'
+
   dsh-emoji@0.3.6:
     resolution: {integrity: sha512-lbKabHwFNk9/uI1mOSEuNyn3YZmrSlzaU5IiSmvuDLBoH83VK1oziOzXtBD2Mo/BsG7aKHC9pEhoHUXX2XX12w==}
     engines: {node: ^22.19.0 || >=24.0.0}
@@ -303,6 +320,12 @@ packages:
       '@deepseek-ai/dsh-system-prompt': ^0.1.7-rc.2 || ^0.2.0-rc.2
       '@deepseek-ai/schemastery': ^3.18.4
       react: ^18.2.0
+
+  dsh-meme@0.1.62:
+    resolution: {integrity: sha512-gg/pRCzDhRbH+tTGcb4prp3+ySeLwXkEM2VANw4OGScXeXXypUIHCiDgAInbrrwJA34+6GAXGemtcHe2WY0a8A==}
+    engines: {node: '>=22.13.0'}
+    peerDependencies:
+      '@deepseek-ai/dsh-tools': 0.2.0-rc.2
 
   dsh-mnemon-provider-byterover@0.5.5:
     resolution: {integrity: sha512-7JOmLOuL+fys+soebYmb6GYtvD9Xj4RL0xf1l8svUL2LKlNpTz68YikdJJBU+EUD292mGcxjX1VLbHGC/FDwiw==}
@@ -787,6 +810,11 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  dsh-deepread@1.0.1(@deepseek-ai/schemastery@3.18.5)(zod@4.6.7):
+    dependencies:
+      '@deepseek-ai/schemastery': 3.18.5
+      zod: 4.6.7
+
   dsh-emoji@0.3.6(@deepseek-ai/dsh-home-paths@0.2.0-rc.2)(@deepseek-ai/schemastery@3.18.5):
     dependencies:
       '@deepseek-ai/dsh-home-paths': 0.2.0-rc.2
@@ -796,6 +824,8 @@ snapshots:
       pngjs: 7.0.0
     transitivePeerDependencies:
       - supports-color
+
+  dsh-meme@0.1.62: {}
 
   dsh-mnemon-provider-byterover@0.5.5(dsh-mnemon-source-memory-spaces@0.5.22(dsh-mnemon@0.5.34)):
     dependencies:

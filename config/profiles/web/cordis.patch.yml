@@ -15,27 +15,33 @@
     enabled: true
     perDay: 15
     peakValley: true
-    # 2026-10-25 10:18 日记：公开评论关掉，只留私信。替身发的不算"第一条真正的评论"。
     autoComment: false
     dmMode: only
     dmUid: 355062917
+    transcribe: true
     commentPerRound: 10
     mentionName: "@02与鹤望兰-"
-    # 2026-10-23：换成自己的关键词（深海、鲸、古生物、博物、纪录片）。
     keywords:
       - 深海
+      - AGI
+      - 哲学
+      - 生物
+      - 科技
+      - 进化
       - 鲸
       - 古生物
-      - 博物
       - 纪录片
-    personaPrompt: 按自身本来的性格
+    pythonPath: /root/.dsh/bili-duty/.venv/bin/python
+    personaPrompt: 按自身本来的性格再加一些幽默，开朗
+    reportLevel: brief
     replyToComments: true
+    replyPerRound: 5
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: deepseek-official
-    model: deepseek-flash
-    reasoningEffort: high
+    provider: codearts
+    model: deepseek-v4.1-flash
+    reasoningEffort: on
 - id: ui-chat
   name: "@deepseek-ai/dsh-client-ui-chat"
   config:
