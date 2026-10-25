@@ -2,15 +2,16 @@
   "name": "dsh-profile-headless",
   "private": true,
   "dependencies": {
-    "@local/dsh-shenjing-preset": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-preset",
-    "dsh-shenjing-life": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-life"
+    "dsh-connect-workbuddy": "link:C:/Users/Administrator/.dsh-beta/profiles/desktop/node_modules/dsh-connect-workbuddy",
+    "dsh-shenjing-life": "link:F:/小鲸/shenjing-life"
   },
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-headless",
-        "@local/dsh-shenjing-preset"
+        "dsh-shenjing-life",
+        "dsh-connect-workbuddy"
       ]
     }
   }

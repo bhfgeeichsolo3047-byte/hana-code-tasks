@@ -1,0 +1,15 @@
+packages:
+  - .
+
+nodeLinker: hoisted
+autoInstallPeers: false
+allowBuilds:
+  cloudflared: true
+  cpu-features: true
+  ssh2: true
+  cloudflared@0.7.3: true
+  cpu-features@0.0.10: true
+  ssh2@1.17.0: true
+  '@google/genai': true
+  protobufjs: true
+  onnxruntime-node: true
