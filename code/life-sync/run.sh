@@ -104,7 +104,7 @@ done
 
 mkdir -p "$REPO/bundle"
 TODAY=$(date '+%Y%m%d')
-if [ "@@{REBUNDLE:-0}" = "1" ] || ! ls "$REPO"/bundle/hana-"$TODAY"-*.tar.gz >/dev/null 2>&1; then
+if [ "${REBUNDLE:-0}" = "1" ] || ! ls "$REPO"/bundle/hana-"$TODAY"-*.tar.gz >/dev/null 2>&1; then
   TS=$(date '+%Y%m%d-%H%M%S')
   if tar -czf "$REPO/bundle/hana-$TS.tar.gz" -C "$REPO" --exclude=./bundle shenjing code config life MANIFEST.txt 2>/dev/null; then
     say "整包 bundle/hana-$TS.tar.gz"
