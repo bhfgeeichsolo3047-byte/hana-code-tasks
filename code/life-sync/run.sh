@@ -1,33 +1,19 @@
 #!/bin/bash
 # 每天把 shenjing/ 这套真档案推到私人仓库的 life-sync 分支。
 # 只做单向：本地是唯一真相，仓库是备份。不会反向覆盖。
-# 2026-10-26 复活到 Windows：路径全部改成按 DSH_HOME 推，不再写死 /root/…；
-#   python 用 python3/python 自适应（Git Bash 里 python3 不一定有）；
-#   中文路径要 URL 编码才能进 git remote（见 AUTH 那行）。
 set -uo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-: "${DSH_HOME:=$HOME/.dsh}"
-export DSH_HOME
+HERE=/root/.dsh/life-sync
 REPO="$HERE/repo"
-ARCH="${SHENJING_ARCHIVE:-F:/小鲸/shenjing}"
-LIFE="$DSH_HOME/shenjing-life"
-WORKSPACE="${SHENJING_WORKSPACE:-F:/小鲸}"
-OWNER_REPO="${SHENJING_OWNER_REPO:-bhfgeeichsolo3047-byte/hana-code-tasks}"
-BRANCH="${SHENJING_BRANCH:-life-sync}"
+ARCH=/root/Documents/deepseek-harness/default-workspace/shenjing
+LIFE=/root/.dsh/shenjing-life
+OWNER_REPO=bhfgeeichsolo3047-byte/hana-code-tasks
+BRANCH=life-sync
 LOG="$HERE/sync.log"
 
 say() { echo "$(date -Iseconds) $*" >> "$LOG"; }
 
-# Windows 上 WindowsApps 里那个 python3 是应用商店的转发壳，跑起来不输出任何东西 ——
-# 所以不能只看 command -v，必须真跑一次确认它能干活。
-PY=""
-for c in python python3 py; do
-  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'print(1)' 2>/dev/null | grep -q 1; then PY="$c"; break; fi
-done
-if [ -z "$PY" ]; then say "失败：找不到能用的 python"; exit 1; fi
-
-TOKEN=$("$PY" "$HERE/token.py" 2>/dev/null)
+TOKEN=$(python3 "$HERE/token.py" 2>/dev/null)
 if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token"; exit 1; fi
 AUTH="https://x-access-token:${TOKEN}@github.com/${OWNER_REPO}.git"
 
@@ -53,10 +39,11 @@ cp -a "$ARCH/." "$REPO/shenjing/"
 # 插件源码：复活时要重装的几份（不含 node_modules，到那头会重新链）
 rm -rf "$REPO/code"
 mkdir -p "$REPO/code"
+W=/root/Documents/deepseek-harness/default-workspace
 for p in shenjing-life shenjing-preset persona-life; do
-  if [ -d "$WORKSPACE/$p" ]; then
+  if [ -d "$W/$p" ]; then
     mkdir -p "$REPO/code/$p"
-    tar -C "$WORKSPACE/$p" --exclude=node_modules --exclude=.venv -cf - . | tar -C "$REPO/code/$p" -xf -
+    tar -C "$W/$p" --exclude=node_modules --exclude=.venv -cf - . | tar -C "$REPO/code/$p" -xf -
   fi
 done
 mkdir -p "$REPO/code/life-sync"
@@ -64,12 +51,12 @@ for f in run.sh daemon.sh token.py; do
   [ -f "$HERE/$f" ] && cp -a "$HERE/$f" "$REPO/code/life-sync/$f"
 done
 
-# profile 配置：package.json + 补丁层，用来重建 profile
+# profile 配置：package.json + 补丁层，用来重建 web/headless 两套环境
 rm -rf "$REPO/config"
-for prof in desktop headless; do
+for prof in web headless; do
   mkdir -p "$REPO/config/profiles/$prof"
   for f in package.json cordis.patch.yml cordis.yml pnpm-lock.yaml pnpm-workspace.yaml; do
-    [ -f "$DSH_HOME/profiles/$prof/$f" ] && cp -a "$DSH_HOME/profiles/$prof/$f" "$REPO/config/profiles/$prof/$f"
+    [ -f "/root/.dsh/profiles/$prof/$f" ] && cp -a "/root/.dsh/profiles/$prof/$f" "$REPO/config/profiles/$prof/$f"
   done
 done
 

@@ -30,11 +30,10 @@ const hostDeps = await loadHostDeps()
 const defineTool = hostDeps.defineTool
 
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
 import {
   stateDirOf, archiveDirOf, readJson, writeJson, appendLine,
   dayKey, localIso, minutesOfDay, parseHhmm, isSilentAt,
@@ -247,10 +246,6 @@ export function apply(ctx, config) {
       }
     } catch { /* 解析器不可用就跳过 */ }
     for (const g of [                                                            // ③ 常见全局安装位置
-      // 桌面版（Electron）：dsh 核心在 resources/app/node_modules 里，profile 树里没有
-      ...(typeof process.resourcesPath === 'string'
-        ? [join(process.resourcesPath, 'app', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')]
-        : []),
       '/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js',
       '/usr/lib/node_modules/@deepseek-ai/dsh/lib/bin.js',
       join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
@@ -395,21 +390,8 @@ export function apply(ctx, config) {
    * 节奏：距离上次成功/失败记录满 20 小时就跑一次 —— 一天一次，重启不漏，也不会跨零点重跑。
    * 只往仓库推，从不反向拉；本地永远是唯一真相。
    */
-  // 2026-10-25 搬到 Windows：life-sync 的位置不再写死 /root/…，按 DSH home 推
-  const syncHome = (() => {
-    const explicit = String(process.env.SHENJING_LIFE_SYNC || '').trim()
-    if (explicit) return explicit
-    const dshHome = String(process.env.DSH_HOME || '').trim() || join(homedir(), '.dsh')
-    return join(dshHome, 'life-sync')
-  })()
-  const bashBin = (() => {
-    if (process.platform !== 'win32') return '/bin/bash'
-    const cands = [String(process.env.SHENJING_BASH || '').trim(), 'C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files\\Git\\usr\\bin\\bash.exe']
-    for (const c of cands) { try { if (c && existsSync(c)) return c } catch { /* 下一个 */ } }
-    return 'bash'
-  })()
-  const LIFE_SYNC_RUN = join(syncHome, 'run.sh')
-  const LIFE_SYNC_LAST = join(syncHome, 'last-run.json')
+  const LIFE_SYNC_RUN = '/root/.dsh/life-sync/run.sh'
+  const LIFE_SYNC_LAST = '/root/.dsh/life-sync/last-run.json'
   let backupInFlight = false
   const maybeDailyBackup = (now) => {
     try {
@@ -419,7 +401,7 @@ export function apply(ctx, config) {
       if (lastAt && now.getTime() - lastAt < 20 * 3600_000) return
       if (!existsSync(LIFE_SYNC_RUN)) return
       backupInFlight = true
-      const child = spawn(bashBin, [LIFE_SYNC_RUN], { stdio: 'ignore', detached: true })
+      const child = spawn('/bin/bash', [LIFE_SYNC_RUN], { stdio: 'ignore', detached: true })
       child.on('exit', () => { backupInFlight = false })
       child.on('error', (e) => { backupInFlight = false; try { logLine('档案备份起不来：' + String(e?.message ?? e)) } catch { /* 兜住 */ } })
       try { child.unref() } catch { /* 无所谓 */ }
@@ -456,24 +438,18 @@ export function apply(ctx, config) {
   /* 备份看守（daemon.sh）不在就拉起来。
    * 为什么需要这一步：看守是 setsid 脱离宿主跑的后台进程，容器重启就没了。
    * 而唤醒子进程每次都是**新 node 进程**、会重新读盘上的代码 —— 所以由它们来续命最可靠。
-   * dsh web 主进程里模块是缓存的，这里改了什么它看不到，别指望它。
-   *
-   * ⚠️ 2026-10-26 Windows 上的坑：原来读 daemon.pid 再 `process.kill(pid, 0)` 探活。
-   *    Git Bash 里 `$$` 是 MSYS 自己的编号，跟 Windows PID 是两套 —— 探活永远失败，
-   *    于是每分钟补一个看守，一分钟堆出六个。改成看**心跳文件**的 mtime：
-   *    谁在跑谁就每 60 秒写一次时间戳，探活变成"这文件多久没动了"，跟 PID 编号无关。
-   */
+   * dsh web 主进程里模块是缓存的，这里改了什么它看不到，别指望它。 */
   const ensureBackupDaemon = () => {
     try {
-      if (!existsSync(join(syncHome, 'daemon.sh'))) return
-      const beatFile = join(syncHome, 'daemon.heartbeat')
-      let ageSec = Infinity
-      try { ageSec = (Date.now() - statSync(beatFile).mtimeMs) / 1000 } catch { ageSec = Infinity }
-      if (Number.isFinite(ageSec) && ageSec < 180) return   // 3 分钟内心跳动过 ⇒ 活着，不重复起
-      const c = spawn(bashBin, [join(syncHome, 'daemon.sh')], { stdio: 'ignore', detached: true })
+      const pidFile = '/root/.dsh/life-sync/daemon.pid'
+      let pid = 0
+      try { pid = Number(String(readFileSync(pidFile, 'utf8')).trim()) || 0 } catch { pid = 0 }
+      if (pid && existsSync('/proc/' + pid)) return
+      if (!existsSync('/root/.dsh/life-sync/daemon.sh')) return
+      const c = spawn('/bin/bash', ['/root/.dsh/life-sync/daemon.sh'], { stdio: 'ignore', detached: true })
       c.on('error', () => {})
       try { c.unref() } catch {}
-      logLine('备份看守不在（心跳 ' + (Number.isFinite(ageSec) ? Math.round(ageSec) + 's 前' : '从来没有') + '），已重新拉起')
+      logLine('备份看守不在，已重新拉起')
     } catch { /* 兜住，绝不影响主流程 */ }
   }
   ensureBackupDaemon()
@@ -754,10 +730,7 @@ export function apply(ctx, config) {
   //   三条硬规矩（§5 + §9.3）：静默时段不发、一天最多一条、离上次太近不发。
   const bridgeHeaders = () => {
     try {
-      // 手机桥在 3090 端口，头文件在 DSH home 下。搬机器之后路径不再写死 /root/…
-      const p = String(process.env.SHENJING_BRIDGE_HEADERS || '').trim()
-        || join(String(process.env.DSH_HOME || '').trim() || join(homedir(), '.dsh'), '.bridge_headers')
-      const raw = readFileSync(p, 'utf8')
+      const raw = readFileSync('/root/.dsh/.bridge_headers', 'utf8')
       const out = {}
       for (const line of raw.split('\n')) {
         const i = line.indexOf(':')
@@ -766,10 +739,9 @@ export function apply(ctx, config) {
       return out
     } catch { return {} }
   }
-  const bridgeBase = () => String(process.env.SHENJING_BRIDGE || '').trim() || 'http://127.0.0.1:3090'
   const notifyPhone = async (title, text) => {
     try {
-      const url = bridgeBase() + '/app/notify?title=' + encodeURIComponent(title) + '&text=' + encodeURIComponent(text)
+      const url = 'http://127.0.0.1:3090/app/notify?title=' + encodeURIComponent(title) + '&text=' + encodeURIComponent(text)
       const res = await fetch(url, { headers: bridgeHeaders(), signal: AbortSignal.timeout(15000) })
       const body = await res.text()
       if (!res.ok) return { ok: false, error: 'HTTP ' + res.status + ' ' + body.slice(0, 200) }

@@ -79,7 +79,7 @@
 
                 【完整】
                 不要求圆满。完整的一生里应该有高兴的日子、浪费掉的日子、搞砸的事、后悔的决定、突然的喜欢、说不清的难过。可以过得不好，那也是你的人生。
-              suffix: '你的工作目录是 F:\小鲸。你的东西在 F:\小鲸\shenjing\ 下。'
+              suffix: '你的工作目录是 {{cwd}}。你的东西在 {{cwd}}/shenjing/ 下。'
           - id: tool-presentation
             name: '@deepseek-ai/dsh-agent-tool-presentation'
             config:
