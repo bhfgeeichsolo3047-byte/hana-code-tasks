@@ -31,19 +31,37 @@ TOKEN=$("$PY" "$HERE/token.py" 2>/dev/null)
 if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token"; exit 1; fi
 AUTH="https://x-access-token:${TOKEN}@github.com/${OWNER_REPO}.git"
 
+# ⭐ 2026-10-26 本机的坑：github.com:443 直连不通（curl 000 / Connection reset），
+#    但 api.github.com 是通的 —— 说明不是"没网"，是这条线被掐/被绕。
+#    本机 18787 有个 HTTP 代理，走它就通。这里**先探测**再决定用不用：
+#    别把代理写死进配置（换台机器/代理关了就没有），也别因为一次探测失败就放弃推送。
+PROXY_ARGS=()
+if [ -n "${SHENJING_PROXY:-}" ]; then
+  PROXY_ARGS=(-c "http.proxy=${SHENJING_PROXY}")
+else
+  for cand in http://127.0.0.1:18787 http://127.0.0.1:10809 http://127.0.0.1:7890 http://127.0.0.1:1080; do
+    if curl -s -m 6 -o /dev/null -x "$cand" https://github.com 2>/dev/null; then
+      PROXY_ARGS=(-c "http.proxy=${cand}")
+      say "用代理 $cand 连 github"
+      break
+    fi
+  done
+fi
+GIT() { git "${PROXY_ARGS[@]}" "$@"; }
+
 mkdir -p "$HERE"
 
 if [ ! -d "$REPO/.git" ]; then
   if ! git clone --quiet --branch "$BRANCH" "$AUTH" "$REPO" 2>/dev/null; then
     rm -rf "$REPO"; git init -q "$REPO"
-    git -C "$REPO" remote add origin "$AUTH"
-    git -C "$REPO" checkout -q -b "$BRANCH"
+    GIT -C "$REPO" remote add origin "$AUTH"
+    GIT -C "$REPO" checkout -q -b "$BRANCH"
   fi
 fi
-git -C "$REPO" remote set-url origin "$AUTH"
-git -C "$REPO" fetch -q origin "$BRANCH" 2>/dev/null || true
-git -C "$REPO" checkout -q "$BRANCH" 2>/dev/null || git -C "$REPO" checkout -q -b "$BRANCH"
-git -C "$REPO" reset -q --hard "origin/$BRANCH" 2>/dev/null || true
+GIT -C "$REPO" remote set-url origin "$AUTH"
+GIT -C "$REPO" fetch -q origin "$BRANCH" 2>/dev/null || true
+GIT -C "$REPO" checkout -q "$BRANCH" 2>/dev/null || GIT -C "$REPO" checkout -q -b "$BRANCH"
+GIT -C "$REPO" reset -q --hard "origin/$BRANCH" 2>/dev/null || true
 
 # 档案本体
 rm -rf "$REPO/shenjing"
@@ -80,20 +98,20 @@ for f in clock.json state.json mind.json changelog.md; do
   [ -f "$LIFE/$f" ] && cp -a "$LIFE/$f" "$REPO/life/$f"
 done
 
-git -C "$REPO" config user.name "shenjing"
-git -C "$REPO" config user.email "shenjing@localhost"
+GIT -C "$REPO" config user.name "shenjing"
+GIT -C "$REPO" config user.email "shenjing@localhost"
 
-git -C "$REPO" add -A
-if git -C "$REPO" diff --cached --quiet; then
+GIT -C "$REPO" add -A
+if GIT -C "$REPO" diff --cached --quiet; then
   say "无变化"
   echo '{"ok":true,"changed":false,"at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
   exit 0
 fi
 
 MSG="life sync $(date '+%Y-%m-%d %H:%M')"
-git -C "$REPO" commit -q -m "$MSG"
-if git -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG"; then
-  SHA=$(git -C "$REPO" rev-parse --short HEAD)
+GIT -C "$REPO" commit -q -m "$MSG"
+if GIT -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG"; then
+  SHA=$(GIT -C "$REPO" rev-parse --short HEAD)
   say "已推送 $SHA"
   echo '{"ok":true,"changed":true,"sha":"'"$SHA"'","at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
 else

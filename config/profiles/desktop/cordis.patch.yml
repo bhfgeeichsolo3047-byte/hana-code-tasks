@@ -1606,8 +1606,8 @@
       enabled: true
       endpoint: http://localhost:11434
       model: nomic-embed-text
-      protocol: auto
       apiKey: ""
+      protocol: auto
     memoryView:
       strategyTypeId: general
       entries:

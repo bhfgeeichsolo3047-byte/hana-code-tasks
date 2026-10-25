@@ -753,14 +753,51 @@ export function apply(ctx, config) {
     } catch { return {} }
   }
   const bridgeBase = () => String(process.env.SHENJING_BRIDGE || '').trim() || 'http://127.0.0.1:3090'
+
+  /* ── 通知的两条腿 ────────────────────────────────────────────────────────────
+   * 手机上（原设计）：3090 那个手机桥，POST 到 /app/notify，弹在手机通知栏。
+   * Windows 上（2026-10-26 搬过来）：**那条腿根本不存在** —— 3090 没进程、`.bridge_headers`
+   *   也没有，`curl 3090` 直接 000。所以 life_tell 在这台机器上一直"看起来能用、实际发不出去"。
+   * 补一条腿：Windows 自己的通知中心（Toast）。哪条能用用哪条，先手机、再桌面。
+   * ⚠️ 两条都失败才算没发出去 —— 免得把"这台机器没有手机桥"当成"她不想说话"。
+   * ─────────────────────────────────────────────────────────────────────────── */
+  const toastFallback = async (title, text) => {
+    if (process.platform !== 'win32') return { ok: false, error: '这台机器没有桌面通知通道' }
+    const script = join(pluginDir, 'lib', 'toast.ps1')
+    if (!existsSync(script)) return { ok: false, error: 'toast.ps1 不见了' }
+    // ⚠️ 中文不能走命令行参数（Windows 是 936/GBK，spawn 会吃掉字），写 UTF-8 文件递进去
+    const payload = join(stateDir, '.toast-payload.json')
+    try {
+      writeFileSync(payload, JSON.stringify({ title, text }), 'utf8')
+      const out = await new Promise((resolveOut) => {
+        let buf = ''
+        const child = spawn('powershell.exe', [
+          '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-DataFile', payload,
+        ], { windowsHide: true })
+        const timer = setTimeout(() => { try { child.kill() } catch { /* 已经没了 */ } }, 20_000)
+        child.stdout?.on('data', (d) => { buf += String(d) })
+        child.stderr?.on('data', (d) => { buf += String(d) })
+        child.on('error', (e) => { clearTimeout(timer); resolveOut('TOAST-FAIL ' + String(e?.message ?? e)) })
+        child.on('close', () => { clearTimeout(timer); resolveOut(buf) })
+      })
+      const ok = /TOAST-OK/.test(out)
+      return ok ? { ok: true, via: 'windows-toast' } : { ok: false, error: out.trim().slice(0, 200) || 'toast 没回 ok' }
+    } catch (e) { return { ok: false, error: String(e?.message ?? e) } }
+  }
+
   const notifyPhone = async (title, text) => {
+    const phones = []
     try {
       const url = bridgeBase() + '/app/notify?title=' + encodeURIComponent(title) + '&text=' + encodeURIComponent(text)
-      const res = await fetch(url, { headers: bridgeHeaders(), signal: AbortSignal.timeout(15000) })
+      const res = await fetch(url, { headers: bridgeHeaders(), signal: AbortSignal.timeout(8000) })
       const body = await res.text()
-      if (!res.ok) return { ok: false, error: 'HTTP ' + res.status + ' ' + body.slice(0, 200) }
-      return { ok: true, body: body.slice(0, 200) }
-    } catch (e) { return { ok: false, error: String(e?.message ?? e) } }
+      if (res.ok) return { ok: true, via: 'phone-bridge', body: body.slice(0, 200) }
+      phones.push('HTTP ' + res.status + ' ' + body.slice(0, 120))
+    } catch (e) { phones.push(String(e?.message ?? e)) }
+
+    const desk = await toastFallback(title, text)
+    if (desk.ok) return { ok: true, via: desk.via, phoneError: phones.join(' / ').slice(0, 200) }
+    return { ok: false, error: '手机桥：' + phones.join(' / ').slice(0, 120) + ' ｜ 桌面：' + String(desk.error ?? '') }
   }
   tool({
     name: 'life_tell',
