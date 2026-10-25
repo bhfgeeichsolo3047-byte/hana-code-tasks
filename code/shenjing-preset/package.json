@@ -1,0 +1,12 @@
+{
+  "name": "@local/dsh-shenjing-preset",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "深鲸 —— 自主人格聊天预设，基于 ptc 组合，工具与技能全开",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

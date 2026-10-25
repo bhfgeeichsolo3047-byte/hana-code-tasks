@@ -1,0 +1,13 @@
+# ============================================================================
+# dsh-shenjing-life —— DSH bundle patch（插件**自带**的挂载声明）
+# ============================================================================
+# 装上之后，profile 只要在 dsh.profile.bundles 里列出本包名即生效：
+#
+#   dsh plugin --profile <profile> add link:/root/Documents/deepseek-harness/default-workspace/shenjing-life
+#
+# 本地开发用 link: 装法。没有 Config —— v0.1 不需要设置页（家目录里的 JSON 就是配置）。
+# ============================================================================
+
+- insert:
+    - id: shenjing-life
+      name: dsh-shenjing-life

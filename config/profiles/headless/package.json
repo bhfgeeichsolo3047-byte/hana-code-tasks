@@ -1,0 +1,16 @@
+{
+  "name": "dsh-profile-headless",
+  "private": true,
+  "dependencies": {
+    "@local/dsh-shenjing-preset": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-preset"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-headless",
+        "@local/dsh-shenjing-preset"
+      ]
+    }
+  }
+}

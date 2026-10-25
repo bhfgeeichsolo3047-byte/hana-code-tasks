@@ -1,0 +1,27 @@
+{
+  "name": "@local/persona-life",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A persistent, evolving AI persona with scheduled exploration, local memory, and gated AI-disclosed outreach.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "DEPLOYMENT.md"],
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "*",
+    "@deepseek-ai/dsh-storage-domain": "*",
+    "@deepseek-ai/dsh-web-fetch-http": "*",
+    "zod": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": { "optional": true },
+    "@deepseek-ai/dsh-storage-domain": { "optional": true },
+    "@deepseek-ai/dsh-web-fetch-http": { "optional": true },
+    "zod": { "optional": true }
+  },
+  "icon": "./icon.svg",
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+}

@@ -1,0 +1,16 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+#
+# 2026-10-24：headless 也要跑"深鲸"的人格 —— dsh-shenjing-life 的唤醒起的就是
+# `--profile headless`；不选这个 preset，醒来的是个陌生 agent 在翻她的档案。
+# 2026-10-24 晚（night wake）：原来的 `- id: agent-preset-registry` 打空了 —— headless
+# profile 里没有这个 entry，preset-shenjing 一直 pending。
+# 这次先把"手"接上：只在唤醒子进程里插入 life 工具（spawn 会带 SHENJING_LIFE_HOME）。
+# 刷B站等其他 headless 轮没有这个变量，不会被动到。
+# 人格那一半还没成：registry 必须排在 preset 前面，而 profile patch 排在 bundle 后面，
+# 现在插进来赶不上 headless 启动时选 preset —— 留到下次重启宿主时再想。
+- insert:
+    - id: shenjing-life
+      name: dsh-shenjing-life
+      disabled: !!js '!process.env.SHENJING_LIFE_HOME'

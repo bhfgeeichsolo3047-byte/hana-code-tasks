@@ -1,0 +1,37 @@
+{
+  "name": "dsh-shenjing-life",
+  "version": "0.1.0",
+  "description": "DSH 插件：唤醒与内分泌 —— clock.json 定时唤醒、mind.json 结构化状态、open_loops 待办、append-only 唤醒日志（小鲸的生理系统 v0.1）",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "shenjing",
+    "clock",
+    "wake"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "prompts",
+    "cordis.patch.yml",
+    "selfcheck.mjs",
+    "install-links.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
