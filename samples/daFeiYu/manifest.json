@@ -1,0 +1,17 @@
+{
+  "model": "gpt-sovits",
+  "version": "v2",
+  "gpt_epochs": 15,
+  "sovits_epochs": 8,
+  "sample_rate": 32000,
+  "language": "zh",
+  "dataset": "YinZilu/da-fei-yu-girl-voice-zh",
+  "dataset_license": "CC-BY-NC-4.0",
+  "dataset_credit": "尹紫鹭幻想社",
+  "repo_commit": "b4570b876f5c086819ba84e3215472733c6a7b70",
+  "created_at": "2026-10-25T18:38:13+08:00",
+  "non_commercial": true,
+  "notes": "本机无可用的 CUDA 设备；WSL2 / VirtualMachinePlatform 在 BIOS 与系统功能里均关闭，无法启用 ROCm。因此按手册附录 A3 走纯 CPU 训练（AMD Ryzen 9 5950X，torch 2.7.1+cpu），is_half=False，s2 batch_size 由 6 折半为 3、s1 由 8 折半为 4。训练集只用了 145 条语音切成 194 段（1040.4 s），6 条唱段已排除。参考音频取自训练集 v0079（5.39 s）。samples 三句为 e15 GPT + e8 SoVITS 合成，seed=1234。",
+  "trained_on": "local-cpu",
+  "gpu": "none (CPU only, AMD Ryzen 9 5950X)"
+}
