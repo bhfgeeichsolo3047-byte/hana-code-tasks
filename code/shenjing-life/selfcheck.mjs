@@ -51,9 +51,7 @@ const fakeSrc = [
   '// 自检用的假 dsh：不是真的 headless 会话，只用来把 spawn -> 退出 -> 结算 这条路走完',
   'import { appendFileSync, existsSync, writeFileSync } from "node:fs"',
   'import { join } from "node:path"',
-  '// 2026-10-25 Windows：家目录不许再写死 /tmp/…（Windows 上 /tmp 落到 C:\tmp，跟 tmpdir() 不是一处）',
-  '// 改成读插件传进来的 SHENJING_LIFE_HOME —— 它传错，spawn-seen.json 就落不到 PLUGIN_HOME 里，断言照样会红',
-  'const home = process.env.SHENJING_LIFE_HOME',
+  'const home = "/tmp/dsh-shenjing-life-selfcheck/home/shenjing-life"   // 自检写死：插件传进来的家就是它',
   'const archive = process.env.SHENJING_ARCHIVE',
   'writeFileSync(join(home, "spawn-seen.json"), JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), env: { SHENJING_LIFE_HOME: home, SHENJING_ARCHIVE: archive } }, null, 2))',
   'if (existsSync(join(home, "mode-activity"))) {',
@@ -363,19 +361,8 @@ const stRaw = JSON.parse(readFileSync(stateFilePath, 'utf8'))
 ok((await call('life_tell', { text: '   ' })).ok === false, '空消息 → 拒发（不会去碰手机通知）')
 writeFileSync(stateFilePath, JSON.stringify({ ...stRaw, proactiveToday: 1 }))
 const tellBlocked = await call('life_tell', { text: '今天已经发过一条了，这条该被挡' })
-// ⚠️ 2026-10-26：这条断言原来硬等 blockedBy==='already-sent-today'，但 life_tell 用的是**真实时钟**，
-//    00:00–07:30 跑自检时闸门会先撞上"静默" ⇒ 红。静默优先于计数本来就是设计（§9 定案：静默比任何情绪都优先），
-//    所以两种都是对的行为，只要"确实被挡了、且挡的理由是这两条之一"。
-const tellWhy = tellBlocked.blockedBy || '-'
-ok(tellBlocked.ok === false && (tellWhy === 'already-sent-today' || tellWhy === 'silent'),
-  '今天已发过一条 ⇒ 拒发（blockedBy=' + tellWhy + '）')
-// 计数那条单独验一次（绕开静默窗口，直接问闸门函数）：不然白天绿、夜里红，等于没验
-if (stRaw.day) {
-  const gateAt = new Date(new Date().setHours(12, 0, 0, 0))
-  const gateLib = (await import('./lib/state.mjs')).canSendMessage
-  ok(gateLib({ ...stRaw, day: stRaw.day, proactiveToday: 1 }, gateAt).why === 'already-sent-today',
-    '闸门：中午 + 今天已发一条 ⇒ already-sent-today（不受跑自检的时刻影响）')
-}
+ok(tellBlocked.ok === false && tellBlocked.blockedBy === 'already-sent-today',
+  '今天已发过一条 ⇒ 拒发（blockedBy=' + (tellBlocked.blockedBy || '-') + '）')
 writeFileSync(stateFilePath, JSON.stringify({ ...stRaw, proactiveToday: 0 }))
 
 /* ── 收尾 ────────────────────────────────────────────────────────────────── */

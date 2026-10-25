@@ -27,27 +27,6 @@ const SELF_MODULES = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_m
 export function candidateRoots() {
   const out = []
   const push = (p) => { if (p && !out.includes(p)) out.push(p) }
-
-  // ⭐ 2026-10-26 最靠谱的一条，放在最前面：**从宿主自己的入口文件往上找**。
-  //    headless profile 里踩过：profile 的 node_modules 没有 dsh-tools（autoInstallPeers: false），
-  //    APPDATA/npm 那条路在这台机器上也不存在（桌面版是 D:\dsh\…\resources\app 装好的），
-  //    结果宿主树一路落空 ⇒ 退到本地等价实现 ⇒ 那版实现漏了 output.render ⇒ 六个工具全注册失败。
-  //    宿主是以 `node …/@deepseek-ai/dsh/lib/bin.js` 或 electron 主进程起来的，
-  //    process.argv[1] 就是那个入口，从它往上走几层一定能碰到 @deepseek-ai/dsh-tools。
-  for (const start of [process.argv?.[1], process.execPath, process.resourcesPath]) {
-    if (!start || typeof start !== 'string') continue
-    try {
-      let dir = dirname(start)
-      for (let i = 0; i < 8; i += 1) {
-        push(join(dir, 'node_modules', '@deepseek-ai'))
-        push(join(dir, 'app', 'node_modules', '@deepseek-ai'))
-        push(join(dir, 'resources', 'app', 'node_modules', '@deepseek-ai'))
-        const up = dirname(dir)
-        if (up === dir) break
-        dir = up
-      }
-    } catch { /* 没有就算了 */ }
-  }
   push(process.env.DSH_HOST_MODULES)
 
   const appdata = process.env.APPDATA
@@ -142,14 +121,7 @@ function localDefineTool(options, log) {
   }
   const parameters = { type: 'object', additionalProperties: false, properties }
   if (required.length) parameters.required = required
-  // ⚠️ 2026-10-26 headless 里踩的：宿主 register 校验的是 { schema, render, presentationMeta? }，
-  //    这里原来只拼了 schema、把 render 丢了 ⇒ 六个 life 工具**全部**注册失败，
-  //    表现是唤醒那一轮的模型手里一个 life 工具都没有（它自己都察觉到了，去数文件凑答案）。
-  //    调用方的 render 是现成的（index.js 的 textOutput 就带 render），原样带上。
-  const renderFn = typeof options.output?.render === 'function'
-    ? options.output.render
-    : (_args, value) => [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }]
-  const output = { schema: compile(options.output?.schema ?? { type: 'json' }, 'output.schema'), render: renderFn }
+  const output = { schema: compile(options.output?.schema ?? { type: 'json' }, 'output.schema') }
   log('dsh-tools 拿不到 —— 用本地等价实现顶上了（工具 ' + options.name + '）')
   return { name: options.name, description: options.description, parameters, output, execute: options.execute }
 }

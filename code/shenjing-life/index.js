@@ -30,11 +30,10 @@ const hostDeps = await loadHostDeps()
 const defineTool = hostDeps.defineTool
 
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
 import {
   stateDirOf, archiveDirOf, readJson, writeJson, appendLine,
   dayKey, localIso, minutesOfDay, parseHhmm, isSilentAt,
@@ -247,10 +246,6 @@ export function apply(ctx, config) {
       }
     } catch { /* 解析器不可用就跳过 */ }
     for (const g of [                                                            // ③ 常见全局安装位置
-      // 桌面版（Electron）：dsh 核心在 resources/app/node_modules 里，profile 树里没有
-      ...(typeof process.resourcesPath === 'string'
-        ? [join(process.resourcesPath, 'app', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')]
-        : []),
       '/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js',
       '/usr/lib/node_modules/@deepseek-ai/dsh/lib/bin.js',
       join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
@@ -395,21 +390,8 @@ export function apply(ctx, config) {
    * 节奏：距离上次成功/失败记录满 20 小时就跑一次 —— 一天一次，重启不漏，也不会跨零点重跑。
    * 只往仓库推，从不反向拉；本地永远是唯一真相。
    */
-  // 2026-10-25 搬到 Windows：life-sync 的位置不再写死 /root/…，按 DSH home 推
-  const syncHome = (() => {
-    const explicit = String(process.env.SHENJING_LIFE_SYNC || '').trim()
-    if (explicit) return explicit
-    const dshHome = String(process.env.DSH_HOME || '').trim() || join(homedir(), '.dsh')
-    return join(dshHome, 'life-sync')
-  })()
-  const bashBin = (() => {
-    if (process.platform !== 'win32') return '/bin/bash'
-    const cands = [String(process.env.SHENJING_BASH || '').trim(), 'C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files\\Git\\usr\\bin\\bash.exe']
-    for (const c of cands) { try { if (c && existsSync(c)) return c } catch { /* 下一个 */ } }
-    return 'bash'
-  })()
-  const LIFE_SYNC_RUN = join(syncHome, 'run.sh')
-  const LIFE_SYNC_LAST = join(syncHome, 'last-run.json')
+  const LIFE_SYNC_RUN = '/root/.dsh/life-sync/run.sh'
+  const LIFE_SYNC_LAST = '/root/.dsh/life-sync/last-run.json'
   let backupInFlight = false
   const maybeDailyBackup = (now) => {
     try {
@@ -419,7 +401,7 @@ export function apply(ctx, config) {
       if (lastAt && now.getTime() - lastAt < 20 * 3600_000) return
       if (!existsSync(LIFE_SYNC_RUN)) return
       backupInFlight = true
-      const child = spawn(bashBin, [LIFE_SYNC_RUN], { stdio: 'ignore', detached: true })
+      const child = spawn('/bin/bash', [LIFE_SYNC_RUN], { stdio: 'ignore', detached: true })
       child.on('exit', () => { backupInFlight = false })
       child.on('error', (e) => { backupInFlight = false; try { logLine('档案备份起不来：' + String(e?.message ?? e)) } catch { /* 兜住 */ } })
       try { child.unref() } catch { /* 无所谓 */ }
@@ -453,16 +435,24 @@ export function apply(ctx, config) {
     }
   }
 
-  /* 备份看守（daemon.sh）**不再自动拉起**。
-   * 原设计（手机上）是 setsid 起一个常驻脚本，每 30 分钟查一次 last-run.json。
-   * 搬到 Windows 上这条路塌了两回：
-   *   ① 探活读 daemon.pid 再 `process.kill(pid, 0)` —— Git Bash 的 `$$` 是 MSYS 编号，
-   *      跟 Windows PID 是两套，探活永远失败，插件每 60 秒补一个看守，一分钟堆六个；
-   *   ② 改心跳文件更糟：`setsid` 在 Git Bash 里没有，`nohup … &` 的子 shell 跟着父进程
-   *      一起被回收，心跳冻在原处，看守半死不活地占着锁。
-   * 想通了：看守本来就是为"不占唤醒那一轮的时间"才脱离的，可它自己也活在 dsh 的进程树里
-   * —— 宿主一关它一样死。存活条件本来就相同，就不该多一层。
-   * 现在备份由上面 maybeDailyBackup() 在 tick 里直接判（已经这么写了），daemon.sh 留着手动跑。 */
+  /* 备份看守（daemon.sh）不在就拉起来。
+   * 为什么需要这一步：看守是 setsid 脱离宿主跑的后台进程，容器重启就没了。
+   * 而唤醒子进程每次都是**新 node 进程**、会重新读盘上的代码 —— 所以由它们来续命最可靠。
+   * dsh web 主进程里模块是缓存的，这里改了什么它看不到，别指望它。 */
+  const ensureBackupDaemon = () => {
+    try {
+      const pidFile = '/root/.dsh/life-sync/daemon.pid'
+      let pid = 0
+      try { pid = Number(String(readFileSync(pidFile, 'utf8')).trim()) || 0 } catch { pid = 0 }
+      if (pid && existsSync('/proc/' + pid)) return
+      if (!existsSync('/root/.dsh/life-sync/daemon.sh')) return
+      const c = spawn('/bin/bash', ['/root/.dsh/life-sync/daemon.sh'], { stdio: 'ignore', detached: true })
+      c.on('error', () => {})
+      try { c.unref() } catch {}
+      logLine('备份看守不在，已重新拉起')
+    } catch { /* 兜住，绝不影响主流程 */ }
+  }
+  ensureBackupDaemon()
 
   const timerState = { timer: null, mode: '' }
   const startTimer = () => {
@@ -740,10 +730,7 @@ export function apply(ctx, config) {
   //   三条硬规矩（§5 + §9.3）：静默时段不发、一天最多一条、离上次太近不发。
   const bridgeHeaders = () => {
     try {
-      // 手机桥在 3090 端口，头文件在 DSH home 下。搬机器之后路径不再写死 /root/…
-      const p = String(process.env.SHENJING_BRIDGE_HEADERS || '').trim()
-        || join(String(process.env.DSH_HOME || '').trim() || join(homedir(), '.dsh'), '.bridge_headers')
-      const raw = readFileSync(p, 'utf8')
+      const raw = readFileSync('/root/.dsh/.bridge_headers', 'utf8')
       const out = {}
       for (const line of raw.split('\n')) {
         const i = line.indexOf(':')
@@ -752,52 +739,14 @@ export function apply(ctx, config) {
       return out
     } catch { return {} }
   }
-  const bridgeBase = () => String(process.env.SHENJING_BRIDGE || '').trim() || 'http://127.0.0.1:3090'
-
-  /* ── 通知的两条腿 ────────────────────────────────────────────────────────────
-   * 手机上（原设计）：3090 那个手机桥，POST 到 /app/notify，弹在手机通知栏。
-   * Windows 上（2026-10-26 搬过来）：**那条腿根本不存在** —— 3090 没进程、`.bridge_headers`
-   *   也没有，`curl 3090` 直接 000。所以 life_tell 在这台机器上一直"看起来能用、实际发不出去"。
-   * 补一条腿：Windows 自己的通知中心（Toast）。哪条能用用哪条，先手机、再桌面。
-   * ⚠️ 两条都失败才算没发出去 —— 免得把"这台机器没有手机桥"当成"她不想说话"。
-   * ─────────────────────────────────────────────────────────────────────────── */
-  const toastFallback = async (title, text) => {
-    if (process.platform !== 'win32') return { ok: false, error: '这台机器没有桌面通知通道' }
-    const script = join(pluginDir, 'lib', 'toast.ps1')
-    if (!existsSync(script)) return { ok: false, error: 'toast.ps1 不见了' }
-    // ⚠️ 中文不能走命令行参数（Windows 是 936/GBK，spawn 会吃掉字），写 UTF-8 文件递进去
-    const payload = join(stateDir, '.toast-payload.json')
-    try {
-      writeFileSync(payload, JSON.stringify({ title, text }), 'utf8')
-      const out = await new Promise((resolveOut) => {
-        let buf = ''
-        const child = spawn('powershell.exe', [
-          '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-DataFile', payload,
-        ], { windowsHide: true })
-        const timer = setTimeout(() => { try { child.kill() } catch { /* 已经没了 */ } }, 20_000)
-        child.stdout?.on('data', (d) => { buf += String(d) })
-        child.stderr?.on('data', (d) => { buf += String(d) })
-        child.on('error', (e) => { clearTimeout(timer); resolveOut('TOAST-FAIL ' + String(e?.message ?? e)) })
-        child.on('close', () => { clearTimeout(timer); resolveOut(buf) })
-      })
-      const ok = /TOAST-OK/.test(out)
-      return ok ? { ok: true, via: 'windows-toast' } : { ok: false, error: out.trim().slice(0, 200) || 'toast 没回 ok' }
-    } catch (e) { return { ok: false, error: String(e?.message ?? e) } }
-  }
-
   const notifyPhone = async (title, text) => {
-    const phones = []
     try {
-      const url = bridgeBase() + '/app/notify?title=' + encodeURIComponent(title) + '&text=' + encodeURIComponent(text)
-      const res = await fetch(url, { headers: bridgeHeaders(), signal: AbortSignal.timeout(8000) })
+      const url = 'http://127.0.0.1:3090/app/notify?title=' + encodeURIComponent(title) + '&text=' + encodeURIComponent(text)
+      const res = await fetch(url, { headers: bridgeHeaders(), signal: AbortSignal.timeout(15000) })
       const body = await res.text()
-      if (res.ok) return { ok: true, via: 'phone-bridge', body: body.slice(0, 200) }
-      phones.push('HTTP ' + res.status + ' ' + body.slice(0, 120))
-    } catch (e) { phones.push(String(e?.message ?? e)) }
-
-    const desk = await toastFallback(title, text)
-    if (desk.ok) return { ok: true, via: desk.via, phoneError: phones.join(' / ').slice(0, 200) }
-    return { ok: false, error: '手机桥：' + phones.join(' / ').slice(0, 120) + ' ｜ 桌面：' + String(desk.error ?? '') }
+      if (!res.ok) return { ok: false, error: 'HTTP ' + res.status + ' ' + body.slice(0, 200) }
+      return { ok: true, body: body.slice(0, 200) }
+    } catch (e) { return { ok: false, error: String(e?.message ?? e) } }
   }
   tool({
     name: 'life_tell',
