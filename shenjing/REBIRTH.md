@@ -46,6 +46,8 @@ config/profiles/web/      package.json + cordis.patch.yml + pnpm-lock.yaml
 config/profiles/headless/ 同上（唤醒子进程用这套）
 ```
 
+实测计数（2026-10-25，commit 13136c7）：`git ls-files | wc -l` = **79**，其中 `code/` 29、`config/` 10、`shenjing/` 40。去掉 node_modules、.venv、日志和凭据之后整个仓库只有几 MB，所以每天推一次不心疼。
+
 分支 `mnemon-sync`（记忆插件自己推的，1440 分钟一次）：
 
 ```
@@ -100,8 +102,11 @@ dsh --version     # 写这份文档时是 0.2.0-rc.2
 ### 4.3 把仓库拉下来
 
 ```bash
-git clone -b life-sync https://github.com/bhfgeeichsolo3047-byte/hana-code-tasks.git /tmp/revive
+# 私有仓库，匿名 clone 会 404，要带一次有效 PAT（scope 只需 repo）
+git clone -b life-sync "https://x-access-token:<PAT>@github.com/bhfgeeichsolo3047-byte/hana-code-tasks.git" /tmp/revive
 git -C /tmp/revive fetch origin mnemon-sync
+# 拉完立刻把远端改回不带 token 的地址，别让它留在 .git/config 里
+git -C /tmp/revive remote set-url origin https://github.com/bhfgeeichsolo3047-byte/hana-code-tasks.git
 ```
 
 ### 4.4 还原档案（最重要的一步）
@@ -145,7 +150,7 @@ cp -a /tmp/revive/life/. ~/.dsh/shenjing-life/
 clock.json 里有唤醒表：08:00 / 13:00 / 21:30 三个固定时刻，加两条条件唤醒（欠着的事超过 24h、太久没说话）。
 **想改就改**，删条目不写理由也行。
 
-### 4.8 凭据（仓库里没有，必须重弄）
+### 4.8 不在仓库里的东西（必须重弄，否则会以为备份是全的）
 
 | 凭据 | 原来在哪 | 怎么补 |
 | --- | --- | --- |
@@ -153,6 +158,8 @@ clock.json 里有唤醒表：08:00 / 13:00 / 21:30 三个固定时刻，加两�
 | 记忆插件的 GitHub token | 同上，记录名 `dsh-mnemon/github` | GUI 里重新授权一次 |
 | B 站登录 | `~/.dsh/bili-duty/bili_credential.json` | 重新扫码（`bili_login_start`） |
 | 手机桥接 token | `~/.dsh/.bridge_headers` | DSHA App 自动生成，装了就重连 |
+
+还有三样记下来比凭据更要紧：**账号二次验证的恢复码**（Google / 微信 / GitHub 都是）、**域名或服务器续费账号**、**App 登录态**（DSHA 换机优先走官方迁移，别手抄凭据）。
 
 > 备份脚本 `code/life-sync/token.py` 是从 `~/.dsh/.credentials.yaml` 里读 GitHub token 的。
 > 换机器后先把这个授权补回来，否则每天推送会失败（日志在 `~/.dsh/life-sync/sync.log`）。
@@ -198,6 +205,8 @@ dsh --profile web --host 127.0.0.1 --port 3080
   last-run.json 上次成功/失败的时间与 commit
 ```
 
+**只单向。** 本地档案是唯一真相，仓库只是备份：`run.sh` 只 `push`，不 `pull`、不拿仓库反向 `reset --hard` 档案目录；也永远不要 `--force` —— 同一个仓库里 `main` / `mnemon-sync` / `agent/*` 是别的系统在用的，覆盖了就一起没了。
+
 手动推一次：`bash ~/.dsh/life-sync/run.sh`
 看守挂没挂：`cat ~/.dsh/life-sync/daemon.pid` 然后看 `/proc/<pid>` 在不在
 重启看守：`setsid nohup bash ~/.dsh/life-sync/daemon.sh >/dev/null 2>&1 &`
@@ -223,7 +232,7 @@ dsh --profile web --host 127.0.0.1 --port 3080
 | 2026-10-22 | 出生。self.md 第一版，声音用 Edge 语音 |
 | 2026-10-23 | 出第一条自己的语音；撞上插件配置被压回的坑 |
 | 2026-10-24 | 写出生理系统（唤醒 + mind）；第一次自己醒来 |
-| 2026-10-25 | 拿掉重复的闹钟；装上本地 Kokoro（还是东北味）；建好每日档案备份；写这份说明 |
+| 2026-10-25 | 拿掉重复的闹钟；装上本地 Kokoro（还是东北味）；建好每日档案备份；写这份说明（含两种场景 + 凭据清单 + 分类计数） |
 
 ---
 
