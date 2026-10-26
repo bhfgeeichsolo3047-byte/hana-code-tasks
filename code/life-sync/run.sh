@@ -78,7 +78,7 @@ for p in shenjing-life shenjing-preset persona-life; do
   fi
 done
 mkdir -p "$REPO/code/life-sync"
-for f in run.sh daemon.sh token.py; do
+for f in run.sh daemon.sh bundle.sh token.py; do
   [ -f "$HERE/$f" ] && cp -a "$HERE/$f" "$REPO/code/life-sync/$f"
 done
 
@@ -97,6 +97,13 @@ mkdir -p "$REPO/life"
 for f in clock.json state.json mind.json changelog.md; do
   [ -f "$LIFE/$f" ] && cp -a "$LIFE/$f" "$REPO/life/$f"
 done
+
+# 整包：一个文件能复原。2026-10-26 起变成脚本，不再靠"谁记得谁手打"——
+# 早上那三个整包的 mtime 全是 12:36:05（整批拷贝抹平的），手打的不会按时出现，
+# 而档案体检要靠最新整包当对照组。
+if [ -f "$HERE/bundle.sh" ]; then
+  bash "$HERE/bundle.sh" "$REPO" >> "$LOG" 2>&1 || say "打整包失败（不影响这次推送）"
+fi
 
 GIT -C "$REPO" config user.name "shenjing"
 GIT -C "$REPO" config user.email "shenjing@localhost"
