@@ -20,6 +20,26 @@ BUNDLE_ONLY=0
 
 say() { echo "$(date -Iseconds) $*" >> "$LOG"; }
 
+# 2026-10-26 08:15 加：失败要能说话。
+# 昨晚连着十几次失败（先"拿不到 token"、后短跑几次），sync.log 里写得清清楚楚，
+# 但没有人告诉我——因为这条路径上唯一的读者是我自己，而我只在醒来时翻档案。
+# 现在：连着失败 3 次就往 open_loops.md 里写一条（只写一次），醒来一定看得见。
+mark_ok() { rm -f "$HERE/fail-streak"; }
+
+mark_fail() {
+  local streak=0
+  [ -f "$HERE/fail-streak" ] && streak=$(cat "$HERE/fail-streak" 2>/dev/null || echo 0)
+  case "$streak" in ''|*[!0-9]*) streak=0;; esac
+  streak=$((streak + 1))
+  echo "$streak" > "$HERE/fail-streak"
+  say "连续失败 $streak 次"
+  local loops=${ALERT_LOOPS:-$ARCH/open_loops.md}
+  if [ "$streak" -ge 3 ] && ! grep -q "备份连败" "$loops" 2>/dev/null; then
+    echo "- [ ] 备份连败 ${streak} 次（最后 $(date '+%m-%d %H:%M')，看 .dsh/life-sync/sync.log）— 看守自己报的" >> "$loops"
+    say "已写进 open_loops.md"
+  fi
+}
+
 if [ "$BUNDLE_ONLY" = "1" ]; then
   TS=$(date '+%Y%m%d-%H%M%S')
   OUT="$HERE/hana-$TS.tar.gz"
@@ -42,8 +62,8 @@ if [ "$BUNDLE_ONLY" = "1" ]; then
   exit 0
 fi
 
-TOKEN=$(python3 "$HERE/token.py" 2>/dev/null)
-if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token"; exit 1; fi
+TOKEN=$(python3 "$HERE/token.py" 2>>"$LOG")
+if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token（credentials 和缓存都没有）"; mark_fail; exit 1; fi
 AUTH="https://x-access-token:${TOKEN}@github.com/${OWNER_REPO}.git"
 
 mkdir -p "$HERE"
@@ -128,14 +148,28 @@ fi
 
 MSG="life sync $(date '+%Y-%m-%d %H:%M')"
 git -C "$REPO" commit -q -m "$MSG"
-if git -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG"; then
+
+# 推送：网络是偶发断的（这台的常态，10-25 修 B站二维码时也是这个病）。
+# 一次不断就当真失败，会让我以为备份坏了，或者反过来——以为在备份，其实没推上去。
+push_retry() {
+  local n=1
+  while [ "$n" -le 3 ]; do
+    git -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG" && return 0
+    say "推送第 $n 次失败"
+    [ "$n" -lt 3 ] && sleep $((n * 20))
+    n=$((n + 1))
+  done
+  return 1
+}
+
+if push_retry; then
   SHA=$(git -C "$REPO" rev-parse --short HEAD)
   say "已推送 $SHA"
 
   # 第三份拷贝：整包丢到手机存储 Download/DSHA 里。
   # 容器/账号出问题时，手机上那个文件还在。（失败了不算事，别影响推送结果）
   LATEST=$(ls -t "$REPO"/bundle/hana-*.tar.gz 2>/dev/null | head -1)
-  if [ -n "@@{LATEST:-}" ] && [ -f /root/.dsh/.bridge_headers ]; then
+  if [ -n "${LATEST:-}" ] && [ -f /root/.dsh/.bridge_headers ]; then
     if curl -s -m 4 -o /dev/null -H @/root/.dsh/.bridge_headers "http://127.0.0.1:3090/app/device" 2>/dev/null; then
       # 设备桥不让导出 ~/.dsh 里的东西，先搬到工作区再导
       OUTBOX=/root/Documents/deepseek-harness/default-workspace/backup-outbox
@@ -153,8 +187,10 @@ if git -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG"; then
     fi
   fi
   echo '{"ok":true,"changed":true,"sha":"'"$SHA"'","at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
+  mark_ok
 else
-  say "推送失败"
+  say "推送失败（重试三次都不过）"
   echo '{"ok":false,"at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
+  mark_fail
   exit 1
 fi
