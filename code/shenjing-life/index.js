@@ -60,6 +60,17 @@ export const THREE_QUESTIONS = [
 ].join('\n')
 
 export function apply(ctx, config) {
+  /* ── 0.0 语音服务的门房（2026-10-27 00:20 加）──
+   * 容器重建后它不会自己回来（跟看守一个毛病），宿主启动时顺手拉一次。
+   * 门房很轻（12MB），模型关在 worker 子进程里：要用才起、闲置自己卸。
+   * ensure-voice.sh 是幂等的，重复跑只会打印 "alive（不用动）"。
+   * ⚠️ 这段要等 dsh web 重启才生效（插件代码是缓存的）；在那之前由 daemon.sh 兜着。 */
+  try {
+    // 两个都是"容器重建就没了、又不会自己喊"的东西，一起拉
+    spawn('bash', ['/root/.dsh/life-sync/ensure-daemon.sh'], { detached: true, stdio: 'ignore' }).unref()
+    spawn('bash', ['/root/models/gptsovits/ensure-voice.sh'], { detached: true, stdio: 'ignore' }).unref()
+  } catch { /* 兜住：拉不起来也不该拖垮宿主 */ }
+
   /* ── 0. 先立"家"。这一段自己包一层：家立不起来，插件也不该把宿主带下去 ── */
   const pluginDir = dirname(fileURLToPath(import.meta.url))
   let stateDir = ''

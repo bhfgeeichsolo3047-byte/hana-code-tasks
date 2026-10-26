@@ -15,8 +15,8 @@
     enabled: true
     perDay: 15
     peakValley: true
-    autoComment: false
-    dmMode: only
+    autoComment: true
+    dmMode: both
     dmUid: 355062917
     transcribe: true
     commentPerRound: 10

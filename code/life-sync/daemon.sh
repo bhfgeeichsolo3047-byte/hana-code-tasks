@@ -25,6 +25,12 @@ except Exception:
     print(999999)
 PY
 )
+  # 2026-10-27 00:20 加：顺手看一眼语音服务的门房（它跟看守一样，容器重建就没了）
+  if ! curl -s --max-time 3 http://127.0.0.1:8790/health >/dev/null 2>&1; then
+    say "语音门房不在，拉起来"
+    bash /root/models/gptsovits/ensure-voice.sh >> "$LOG" 2>&1 || say "语音服务拉起失败"
+  fi
+
   if [ "${AGE:-999999}" -ge 14400 ]; then
     say "距上次 $((AGE/3600)) 小时，开始推"
     bash "$HERE/run.sh" && say "推完" || say "推失败"

@@ -1,8 +1,8 @@
 {
   "day": "2026-10-26",
-  "wakesToday": 1,
+  "wakesToday": 2,
   "proactiveToday": 0,
-  "lastWakeAt": "2026-10-26T00:11:50.149Z",
+  "lastWakeAt": "2026-10-26T13:36:17.643Z",
   "lastWakeResult": "activity",
   "lastProactiveAt": "2026-10-25T05:06:47.286Z",
   "stretch": 1,
@@ -10,9 +10,9 @@
   "lastFired": {
     "morning": "2026-10-26T08:11+08:00",
     "noon": "2026-10-26T13:00+08:00",
-    "night": "2026-10-26T21:30+08:00"
+    "night": "2026-10-26T21:36+08:00"
   },
-  "lastWhy": "clock:morning@08:00",
+  "lastWhy": "clock:night@21:30",
   "reportedClock": [
     "2026-10-26:noon"
   ]
