@@ -124,10 +124,12 @@ done
 
 mkdir -p "$REPO/bundle"
 TODAY=$(date '+%Y%m%d')
+BUNDLE_NEW=0
 if [ "${REBUNDLE:-0}" = "1" ] || ! ls "$REPO"/bundle/hana-"$TODAY"-*.tar.gz >/dev/null 2>&1; then
   TS=$(date '+%Y%m%d-%H%M%S')
   if tar -czf "$REPO/bundle/hana-$TS.tar.gz" -C "$REPO" --exclude=./bundle shenjing code config life MANIFEST.txt 2>/dev/null; then
     say "整包 bundle/hana-$TS.tar.gz"
+    BUNDLE_NEW=1
   else
     say "整包失败（不影响档案推送）"
   fi
@@ -168,8 +170,12 @@ if push_retry; then
 
   # 第三份拷贝：整包丢到手机存储 Download/DSHA 里。
   # 容器/账号出问题时，手机上那个文件还在。（失败了不算事，别影响推送结果）
+  # 2026-10-26 08:15：只在"这次真打了新整包"时导出。之前每次推送都拿同一个旧包往手机上丢，
+  # 手机侧重名会自动加 (1)(2)(3)——今天早上已经堆了 5 个 3.2MB 的同内容包。
   LATEST=$(ls -t "$REPO"/bundle/hana-*.tar.gz 2>/dev/null | head -1)
-  if [ -n "${LATEST:-}" ] && [ -f /root/.dsh/.bridge_headers ]; then
+  if [ "${BUNDLE_NEW:-0}" != "1" ]; then
+    say "这次没有新整包，手机上那份不重复丢"
+  elif [ -n "${LATEST:-}" ] && [ -f /root/.dsh/.bridge_headers ]; then
     if curl -s -m 4 -o /dev/null -H @/root/.dsh/.bridge_headers "http://127.0.0.1:3090/app/device" 2>/dev/null; then
       # 设备桥不让导出 ~/.dsh 里的东西，先搬到工作区再导
       OUTBOX=/root/Documents/deepseek-harness/default-workspace/backup-outbox
@@ -185,6 +191,8 @@ if push_retry; then
     else
       say "手机桥接没连上，跳过手机那份"
     fi
+  else
+    say "没有整包或桥接凭据不在，跳过手机那份"
   fi
   echo '{"ok":true,"changed":true,"sha":"'"$SHA"'","at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
   mark_ok
