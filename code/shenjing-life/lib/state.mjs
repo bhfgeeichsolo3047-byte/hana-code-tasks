@@ -28,8 +28,26 @@ export const IDLE_STREAK_TO_STRETCH = 3
 /** 降频上限（间隔最多 ×4） */
 export const MAX_STRETCH = 4
 
-/** 旧线（小鲸档案那条）—— 绑定在**档案**上的路径：open_loops.md 在书桌上，不在器官里 */
-export const DEFAULT_ARCHIVE_DIR = '/root/Documents/deepseek-harness/default-workspace/shenjing'
+/** 旧线（小鲸档案那条）—— 绑定在**档案**上的路径：open_loops.md 在书桌上，不在器官里
+ *
+ *  2026-10-25 搬到 Windows 之后改成按顺序探测，不再写死 /root/…：
+ *    ① SHENJING_ARCHIVE（复活脚本/排障时手动指定）
+ *    ② DSH_ARCHIVE_DIR（selfcheck 一直用的那个）
+ *    ③ 这台机器上档案真正待的地方（F:\小鲸\shenjing）
+ *    ④ 老线 /root/…（万一哪天又回容器里跑）
+ *  只读判断，不建目录 —— 档案不该被程序"顺手"造出来。
+ */
+function pickArchiveDir() {
+  const env = String(process.env.SHENJING_ARCHIVE || '').trim() || String(process.env.DSH_ARCHIVE_DIR || '').trim()
+  if (env) return env
+  const candidates = [
+    'F:\\小鲸\\shenjing',
+    '/root/Documents/deepseek-harness/default-workspace/shenjing',
+  ]
+  for (const c of candidates) { try { if (existsSync(c)) return c } catch { /* 下一个 */ } }
+  return candidates[0]
+}
+export const DEFAULT_ARCHIVE_DIR = pickArchiveDir()
 
 /** 家目录（器官）：配置 / 状态 / 日志都在这儿 */
 export function stateDirOf(ctx) {
@@ -282,7 +300,10 @@ export function nextMind(prev, input, now = new Date()) {
  * ⚠️ 不许"猜"哪些行是待办：解析宽一点就会把标题、注释吃进去 ⇒ 宁可漏，不可多。
  */
 export function parseLoops(text) {
-  const lines = String(text ?? '').split('\n')
+  // ⚠️ 2026-10-26 搬到 Windows 踩的：档案文件是 CRLF，而 JS 正则的 `.` **不匹配 \r**
+  //    （\r 和 \n 一样算 line terminator）⇒ `(.*)$` 在 "- [ ] 写第一条…\r" 上永远不匹配，
+  //    open_loops.md 一条都解析不出来，life_status 报 open:0。先把 \r 统一掉再按行切。
+  const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n')
   const items = []
   lines.forEach((line, i) => {
     const m = /^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/.exec(line)
