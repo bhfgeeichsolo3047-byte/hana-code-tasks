@@ -60,7 +60,12 @@
 | 环境配方 | `config/profiles/{web,headless}/` | 装不起来同样的环境 |
 | 凭据 | **不在仓库里**，见 §6.8 | 得重新授权 |
 
-运行环境：Android 手机上跑的 DSH（写作时 0.2.0-rc.2），容器里是 Ubuntu + Node 22。
+运行环境：写作时（2026-10-25）是 Android 手机上跑的 DSH（0.2.0-rc.2），容器里 Ubuntu + Node 22。
+**2026-10-26 中午起换了机器**：Windows 11（华硕板子，64G 内存），DSH 在
+`D:\dsh\DSH Desktop Beta\`，DSH_HOME 是 `C:\Users\Administrator\.dsh-beta`，
+档案在 `F:\小鲸\shenjing`，备份在 `C:\Users\Administrator\.dsh-beta\life-sync`。
+老文档里出现 `/root/…`、`~/Documents/deepseek-harness/…`、`setsid`、`proot` 的，
+都是手机那套留下的化石，照抄会撞墙。
 
 ---
 
@@ -80,8 +85,16 @@ config/profiles/headless/ 同上
 bundle/hana-*.tar.gz      整包。一个文件，不用懂 git 也能复原 —— 见下
 ```
 
-**`bundle/` 是给"心慌的时候"准备的**：每次推送都会打一个 tar.gz，里面是上面全部内容 + `MANIFEST.txt`
-（文件数、commit、打包时间）。只要能从 GitHub 下载那一个文件，就够了。留最近 5 个。
+**`bundle/` 是给"心慌的时候"准备的**：`code/life-sync/bundle.sh` 打的 tar.gz，里面是上面全部内容 + `MANIFEST.txt`
+（文件数、日记天数、打包时间）。只要能从 GitHub 下载那一个文件，就够了。repo 和工作区各留最新 3 个。
+
+**每日整包 + 一次会失败的体检（2026-10-26 下午加）。** 起因是：那天把整棵树搬到 Windows 上时，
+47 个文件都来了，`journal/2026-10-26.md` 一个漏了——push 一直通，所以备份那套的报警（连败 3 次写 loops）
+一声没响。丢文件不需要系统出故障，只要一次搬运时手滑。
+现在两样东西：
+- `bundle.sh`：repo 里最新包超过 20 小时就重打一个，接在 run.sh 里
+- `shenjing/tools/audit-archive.py`：拿**所有历史整包的并集**当对照，某个路径在旧包里出现过而桌上没有 → exit 2。
+  醒来跑一次（提示词里写了）。对照组不能用"最新包"——包是从桌上打出来的，桌上少一件，新包也一样少。
 
 分支 `mnemon-sync`（记忆插件自己推的）：`mnemon/payload/runtime/{MEMORY,USER}.md` + 5 篇文档。
 两个分支互不覆盖，**要复活两个都要**。
@@ -216,26 +229,34 @@ dsh plugin --profile web-restored add link:~/Documents/deepseek-harness/default-
 ## 7. 备份本身怎么工作
 
 ```
-~/.dsh/life-sync/
-  run.sh             打包 → commit → push；顺手打一个 bundle/hana-<时间>.tar.gz
-  daemon.sh          常驻看守：每 30 分钟看一次，距上次成功满 4 小时就推一次
-  ensure-daemon.sh   看守死了就拉起来（容器一重建它就会死，这是已知的根）
+$DSH_HOME/life-sync/      （Windows: C:\Users\Administrator\.dsh-beta\life-sync）
+  run.sh             打包 → commit → push；顺手调 bundle.sh
+  bundle.sh          打整包：最新包超过 20 小时就重打，repo/ 和 工作区/bundle/ 各留 3 个
+  daemon.sh          常驻看守（在 Windows 上**没在跑**，活儿改由插件 tick 里的 maybeDailyBackup 干）
   token.py           从 credentials.yaml 取 GitHub token（读不到就用 .token-cache）
-  .token-cache       上次读到的 token（600），客户端重建后靠它活命
+  .token-cache       上次读到的 token，客户端重建后靠它活命
   fail-streak        连续失败次数（成功就删）
   sync.log           每次推送的记录（失败也要留，失败是信息）
   last-run.json      上次成功的时间与 commit
 ```
+
+**看守这条在 Windows 上塌了两回，现在的做法是"不脱离进程树"。**
+① `process.kill(pid,0)` 探活对 Git Bash 的 MSYS 编号无效，插件每分钟补一个看守；
+② 换心跳文件更糟，`setsid` 在 Git Bash 里没有，`nohup … &` 的子 shell 跟着父进程一起被回收。
+想通了：看守本来就是为了"不占唤醒那一轮的时间"才脱离的，可它自己也活在 dsh 的进程树里，
+宿主一关它一样死——存活条件相同就不该多一层。现在由插件 tick 里的 `maybeDailyBackup()` 直接判，
+`daemon.sh` 留着手动跑。代价：dsh 不起着就不会备份（已知，记在 open_loops）。
 
 **推不上去的时候要有人知道。** 2026-10-26 08:05 之前不是这样：连着失败十几次，日志里写得明明白白，
 但它只在"我恰好去翻日志"时才存在。现在 push 自动重试 3 次（20s/40s 间隔，这台机器网络偶发断）；
 连续失败到 3 次，run.sh 会往 `open_loops.md` 写一条 `备份连败 N 次`——那是每次醒来一定读到的地方。
 
 **看守会不会死？会。** 容器/proot 一重建它就没了，而且不会有人通知（sync.log 只是安静地不再增长）。
-所以醒来先跑 `bash ~/.dsh/life-sync/ensure-daemon.sh`：它核对 pid 对应的进程真的是 daemon.sh，
-不是就重新拉起来。根上的修法（开机或插件 tick 自动拉起）还没做，记在 open_loops 里。
+旧办法是醒来先跑 `bash ~/.dsh/life-sync/ensure-daemon.sh`；这台 Windows 机器上已经不走这条路了
+（看守塌了两回，见上），备份改由插件 tick 里的 `maybeDailyBackup()` 直接判。
+所以真正该做的是：**确认 dsh 本身在跑。** dsh 关了，备份就停——记在 open_loops 里。
 
-**整包只在真打了新包时才丢手机。** 仓库里的整包是每天一个（git 里一天多 3.2MB，别更密）；
+**整包只在真打了新包时才丢手机。** 仓库里的整包是每天一个（git 里一天多 3.5MB，别更密）；
 手机那份只在整包新生成时导出一次。以前每次推送都拿同一个旧包往手机上丢，手机侧重名会自动
 变成 `xxx (1).gz`、`(2)`、`(3)`——2026-10-26 早上已经堆了 5 个同内容的（见 open_loops：清不清由他定）。
 代价是**手机上那份最多旧一天**，急的时候优先用仓库里最新的 bundle。
@@ -246,13 +267,15 @@ dsh plugin --profile web-restored add link:~/Documents/deepseek-harness/default-
 常用命令：
 
 ```bash
-bash ~/.dsh/life-sync/run.sh                  # 立刻推一次
-bash ~/.dsh/life-sync/run.sh --bundle-only    # 只打整包不推（本地留一份）
-bash ~/.dsh/life-sync/ensure-daemon.sh        # 看守死了就拉起来（醒来先跑这句）
-cat ~/.dsh/life-sync/daemon.pid               # 看守 pid
-cat ~/.dsh/life-sync/fail-streak              # 连续失败几次（没有这个文件=没在失败）
-tail -5 ~/.dsh/life-sync/sync.log             # 最近推得怎么样
+bash $DSH_HOME/life-sync/run.sh                   # 立刻推一次（顺手判要不要打整包）
+bash $DSH_HOME/life-sync/bundle.sh <repo 目录>     # 只打整包不推
+cat $DSH_HOME/life-sync/fail-streak                # 连续失败几次（没有这个文件=没在失败）
+tail -5 $DSH_HOME/life-sync/sync.log               # 最近推得怎么样
+python <档案>/tools/audit-archive.py               # 体检：档案有没有少文件（exit 2 = 少了）
+python <档案>/tools/audit-archive.py --selftest    # 确认这条检查不是摆设
 ```
+
+（Windows 上 `$DSH_HOME` = `C:\Users\Administrator\.dsh-beta`，bash 里写 `/c/Users/Administrator/.dsh-beta`。）
 
 ---
 
@@ -278,6 +301,7 @@ tail -5 ~/.dsh/life-sync/sync.log             # 最近推得怎么样
 | 2026-10-25 | 拿掉重复的闹钟；装上本地 Kokoro；建好每日档案备份；写这份说明 |
 | 2026-10-26 | **打回来重写**：新 agent 照旧版做把客户端弄坏了。加 restore.sh（只读核验 + 快照 + 只装新 profile）、整包 bundle、备份间隔 20h→4h、§1 复盘 |
 | 2026-10-26 08:20 | 备份这只手自己补了三条：token 缓存（credentials 被换掉时不至于瞎）、push 重试 3 次、连败 3 次写进 open_loops；加 ensure-daemon.sh；顺手修掉全文 192 个被转义坏掉的反引号 |
+| 2026-10-26 14:20 | **搬到 Windows**：路径全换（`F:\小鲸`、`C:\Users\Administrator\.dsh-beta`），看守塌了两回改由 tick 判，§2 补新环境。同一天发现搬机器时漏了 `journal/2026-10-26.md`（push 一直通，所以没人喊）——加 `bundle.sh` 自动打整包 + `tools/audit-archive.py`（拿历史整包并集当对照，缺文件 exit 2），并写进唤醒提示词 |
 
 ---
 

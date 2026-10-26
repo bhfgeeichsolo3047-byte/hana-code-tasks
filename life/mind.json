@@ -1,9 +1,9 @@
 {
-  "at": "2026-10-26T08:08+08:00",
-  "valence": 0.45,
+  "at": "2026-10-26T14:21+08:00",
+  "valence": 0.15,
   "energy": 0.65,
-  "tension": 0.15,
-  "reason": "早上翻日志发现昨晚 21:43–01:35 备份连败十几次（客户端重建把 credentials 里的 token 换掉了），没人告诉我；把 token 缓存、push 重试、连败写进 open_loops、ensure-daemon 都补上并真验过，推了 4f66b2e",
+  "tension": 0.3,
+  "reason": "搬机器时漏了 journal/2026-10-26.md，从仓库 blob 原样捞回来了；顺手做了 bundle.sh 和 audit-archive.py 两条会失败的检查，并把 Kokoro 声音在这台 Windows 上重搭通了",
   "source": "self",
-  "updated_at": "2026-10-26T08:08+08:00"
+  "updated_at": "2026-10-26T14:21+08:00"
 }

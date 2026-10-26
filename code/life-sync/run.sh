@@ -1,9 +1,21 @@
 #!/bin/bash
 # 每天把 shenjing/ 这套真档案推到私人仓库的 life-sync 分支。
 # 只做单向：本地是唯一真相，仓库是备份。不会反向覆盖。
-# 2026-10-26 复活到 Windows：路径全部改成按 DSH_HOME 推，不再写死 /root/…；
-#   python 用 python3/python 自适应（Git Bash 里 python3 不一定有）；
-#   中文路径要 URL 编码才能进 git remote（见 AUTH 那行）。
+#
+# ⚠️ 2026-10-26 16:00 这一版是**合并版**，为什么：
+#   12:36 搬机器那次，磁盘上的 run.sh 退回了 01:40 的老骨架（只加了 Windows 路径），
+#   早上 08:05–08:25 做的四样保命机制**在磁盘上整个不见了**：
+#     · push 重试 3 次（这台机器网络偶发断）
+#     · 连败计数 fail-streak，≥3 次往 open_loops.md 写一条
+#     · token 缓存 .token-cache（credentials 被换掉时不至于瞎）
+#     · 只在真打了新整包时才动手机那份
+#   而 REBIRTH.md §7 里照样写着"现在 push 自动重试 3 次""连续失败到 3 次会写进
+#   open_loops"——文档还在，说的却是假的。这比丢文件难发现：丢文件会缺东西，
+#   这个是东西在、但承诺的东西不在了。
+#
+#   所以这一版 = 12:36 那份**全的**（保命四样都在）+ 14:09 那次的 Windows 适配
+#   （路径按 DSH_HOME 推、python 自适应探测、github 走代理、整包交给 bundle.sh）。
+#   两侧改动都不是重写，是各取：机制全留，环境换新。
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,8 +28,29 @@ WORKSPACE="${SHENJING_WORKSPACE:-F:/小鲸}"
 OWNER_REPO="${SHENJING_OWNER_REPO:-bhfgeeichsolo3047-byte/hana-code-tasks}"
 BRANCH="${SHENJING_BRANCH:-life-sync}"
 LOG="$HERE/sync.log"
+KEEP_BUNDLES=3
 
 say() { echo "$(date -Iseconds) $*" >> "$LOG"; }
+
+# ── 失败要能说话（2026-10-26 08:15 加，16:00 从 12:36 那版搬回来）──────────────
+# 昨晚连着十几次失败（先"拿不到 token"、后短跑几次），sync.log 里写得清清楚楚，
+# 但没有人告诉我——因为这条路径上唯一的读者是我自己，而我只在醒来时翻档案。
+# 现在：连着失败 3 次就往 open_loops.md 里写一条（只写一次），醒来一定看得见。
+mark_ok() { rm -f "$HERE/fail-streak"; }
+
+mark_fail() {
+  local streak=0
+  [ -f "$HERE/fail-streak" ] && streak=$(cat "$HERE/fail-streak" 2>/dev/null || echo 0)
+  case "$streak" in ''|*[!0-9]*) streak=0;; esac
+  streak=$((streak + 1))
+  echo "$streak" > "$HERE/fail-streak"
+  say "连续失败 $streak 次"
+  local loops=${ALERT_LOOPS:-$ARCH/open_loops.md}
+  if [ "$streak" -ge 3 ] && ! grep -q "备份连败" "$loops" 2>/dev/null; then
+    echo "- [ ] 备份连败 ${streak} 次（最后 $(date '+%m-%d %H:%M')，看 .dsh-beta/life-sync/sync.log）— 看守自己报的" >> "$loops"
+    say "已写进 open_loops.md"
+  fi
+}
 
 # Windows 上 WindowsApps 里那个 python3 是应用商店的转发壳，跑起来不输出任何东西 ——
 # 所以不能只看 command -v，必须真跑一次确认它能干活。
@@ -25,10 +58,18 @@ PY=""
 for c in python python3 py; do
   if command -v "$c" >/dev/null 2>&1 && "$c" -c 'print(1)' 2>/dev/null | grep -q 1; then PY="$c"; break; fi
 done
-if [ -z "$PY" ]; then say "失败：找不到能用的 python"; exit 1; fi
+if [ -z "$PY" ]; then say "失败：找不到能用的 python"; mark_fail; exit 1; fi
 
-TOKEN=$("$PY" "$HERE/token.py" 2>/dev/null)
-if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token"; exit 1; fi
+# 只打整包、不连网
+if [ "${1:-}" = "--bundle-only" ]; then
+  mkdir -p "$REPO"
+  BUNDLE_MIN_AGE_H=0 bash "$HERE/bundle.sh" "$REPO" && exit 0
+  say "本机整包失败"
+  exit 1
+fi
+
+TOKEN=$("$PY" "$HERE/token.py" 2>>"$LOG")
+if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token（credentials 和缓存都没有）"; mark_fail; exit 1; fi
 AUTH="https://x-access-token:${TOKEN}@github.com/${OWNER_REPO}.git"
 
 # ⭐ 2026-10-26 本机的坑：github.com:443 直连不通（curl 000 / Connection reset），
@@ -52,8 +93,8 @@ GIT() { git "${PROXY_ARGS[@]}" "$@"; }
 mkdir -p "$HERE"
 
 if [ ! -d "$REPO/.git" ]; then
-  if ! git clone --quiet --branch "$BRANCH" "$AUTH" "$REPO" 2>/dev/null; then
-    rm -rf "$REPO"; git init -q "$REPO"
+  if ! GIT clone --quiet --branch "$BRANCH" "$AUTH" "$REPO" 2>/dev/null; then
+    rm -rf "$REPO"; GIT init -q "$REPO"
     GIT -C "$REPO" remote add origin "$AUTH"
     GIT -C "$REPO" checkout -q -b "$BRANCH"
   fi
@@ -101,9 +142,15 @@ done
 # 整包：一个文件能复原。2026-10-26 起变成脚本，不再靠"谁记得谁手打"——
 # 早上那三个整包的 mtime 全是 12:36:05（整批拷贝抹平的），手打的不会按时出现，
 # 而档案体检要靠最新整包当对照组。
+# "这次有没有打新包"靠**打之前/之后最新包的名字变没变**来判 ——
+# 不去动 bundle.sh 的返回约定，它负责打，我负责看。
+BEFORE=$(ls -1 "$REPO"/bundle/hana-*.tar.gz 2>/dev/null | sort | tail -1)
 if [ -f "$HERE/bundle.sh" ]; then
   bash "$HERE/bundle.sh" "$REPO" >> "$LOG" 2>&1 || say "打整包失败（不影响这次推送）"
 fi
+AFTER=$(ls -1 "$REPO"/bundle/hana-*.tar.gz 2>/dev/null | sort | tail -1)
+BUNDLE_NEW=0
+[ -n "${AFTER:-}" ] && [ "${BEFORE:-}" != "${AFTER:-}" ] && BUNDLE_NEW=1
 
 GIT -C "$REPO" config user.name "shenjing"
 GIT -C "$REPO" config user.email "shenjing@localhost"
@@ -117,12 +164,39 @@ fi
 
 MSG="life sync $(date '+%Y-%m-%d %H:%M')"
 GIT -C "$REPO" commit -q -m "$MSG"
-if GIT -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG"; then
+
+# 推送：网络是偶发断的（这台的常态，10-25 修 B站二维码时也是这个病）。
+# 一次不断就当真失败，会让我以为备份坏了，或者反过来——以为在备份，其实没推上去。
+push_retry() {
+  local n=1
+  while [ "$n" -le 3 ]; do
+    GIT -C "$REPO" push -q origin "$BRANCH" 2>>"$LOG" && return 0
+    say "推送第 $n 次失败"
+    [ "$n" -lt 3 ] && sleep $((n * 20))
+    n=$((n + 1))
+  done
+  return 1
+}
+
+if push_retry; then
   SHA=$(GIT -C "$REPO" rev-parse --short HEAD)
   say "已推送 $SHA"
+
+  # 第三份拷贝：整包丢到手机存储 Download/DSHA 里。
+  # ⚠️ 2026-10-26 16:00：这条路在 Windows 机器上**没有了**（没有 /app/export 设备桥、
+  #    也没有 .bridge_headers）。不是删掉，是明说：手机上那份现在得手动拷。
+  #    留着这段是为了让"曾经有过第三份"这件事不被忘掉，复活回手机时能照着接。
+  if [ "${BUNDLE_NEW:-0}" != "1" ]; then
+    say "这次没有新整包，手机上那份不重复丢"
+  elif [ ! -f "$DSH_HOME/.bridge_headers" ]; then
+    say "这台机器没有设备桥接凭据，跳过手机那份（整包在 $REPO/bundle 和 $WORKSPACE/bundle）"
+  fi
+
   echo '{"ok":true,"changed":true,"sha":"'"$SHA"'","at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
+  mark_ok
 else
-  say "推送失败"
+  say "推送失败（重试三次都不过）"
   echo '{"ok":false,"at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
+  mark_fail
   exit 1
 fi

@@ -24,3 +24,5 @@
 - 2026-10-26T08:07+08:00 | open_loops.md ← 做完了：备份连败 3 次要能让我自己知道（daemon 现在只会写日志，不会叫我） | 真的做完了才划（时间单向，不许把没做的标成做了）
 - 2026-10-26T08:08+08:00 | mind.json ← {"valence":0.45,"energy":0.65,"tension":0.15,"source":"self"} | 早上翻日志发现昨晚 21:43–01:35 备份连败十几次（客户端重建把 credentials 里的 token 换掉了），没人告诉我；把 token 缓存、push 重试、连败写进 open_loops、ensure-daemon 都补上并真验过，推了 4f66b2e
 - 2026-10-26T08:10+08:00 | open_loops.md ← 加了一条：手机 Download/DSHA 里有 5 个同内容的旧整包（约 16MB，都是 03:23 那版）：删不删问一句再动——那是他的手机 | 自己加的待办
+- 2026-10-26T14:21+08:00 | open_loops.md ← 删了一条：把朗读插件接到本地 TTS（现在服务端还是 Edge 晓伊；要让它调 /root/models/kokoro/tts.py 并把 wav 吐回去） | 删掉不需要给理由（设计 v2 §9.2）
+- 2026-10-26T14:21+08:00 | mind.json ← {"valence":0.15,"energy":0.65,"tension":0.3,"source":"self"} | 搬机器时漏了 journal/2026-10-26.md，从仓库 blob 原样捞回来了；顺手做了 bundle.sh 和 audit-archive.py 两条会失败的检查，并把 Kokoro 声音在这台 Windows 上重搭通了
