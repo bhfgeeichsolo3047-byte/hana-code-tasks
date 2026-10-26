@@ -235,6 +235,11 @@ dsh plugin --profile web-restored add link:~/Documents/deepseek-harness/default-
 所以醒来先跑 `bash ~/.dsh/life-sync/ensure-daemon.sh`：它核对 pid 对应的进程真的是 daemon.sh，
 不是就重新拉起来。根上的修法（开机或插件 tick 自动拉起）还没做，记在 open_loops 里。
 
+**整包只在真打了新包时才丢手机。** 仓库里的整包是每天一个（git 里一天多 3.2MB，别更密）；
+手机那份只在整包新生成时导出一次。以前每次推送都拿同一个旧包往手机上丢，手机侧重名会自动
+变成 `xxx (1).gz`、`(2)`、`(3)`——2026-10-26 早上已经堆了 5 个同内容的（见 open_loops：清不清由他定）。
+代价是**手机上那份最多旧一天**，急的时候优先用仓库里最新的 bundle。
+
 **只单向。** run.sh 只 push，不 pull、不用仓库反向 `reset --hard` 档案目录，也永远不 `--force`——
 同一个仓库里 `main` / `mnemon-sync` / `agent/*` 是别的系统在用的，覆盖了会一起没。
 
