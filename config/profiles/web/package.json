@@ -7,6 +7,7 @@
     "@local/persona-life": "link:/root/Documents/deepseek-harness/default-workspace/persona-life",
     "@memef1f1y/dsh-plugin-tts": "^0.6.7",
     "@nanmicoder/dsh-agent-teams": "^0.1.26",
+    "@zaofan/dsh-qqbot": "^1.10.46",
     "dsh-app-integration": "link:/root/dsha-app-integration",
     "dsh-auto-review": "link:/root/dsha-auto-review",
     "dsh-bili-scroll": "^2.0.2",
@@ -38,7 +39,6 @@
         "dsh-task-notifier",
         "dsh-status-overlay",
         "dsh-web-mobile",
-        "dsh-whale-widget",
         "dsh-computer-use-android",
         "dsh-auto-review",
         "dsh-tool-vscreen",
@@ -60,7 +60,8 @@
         "@local/persona-life",
         "dsh-mnemon",
         "dsh-meme",
-        "dsh-deepread"
+        "dsh-deepread",
+        "@zaofan/dsh-qqbot"
       ],
       "patchReload": "startup"
     }

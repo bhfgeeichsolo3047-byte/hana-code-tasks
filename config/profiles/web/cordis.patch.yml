@@ -214,3 +214,18 @@
     maxOutreachPerDay: 1
 - id: shenjing-life
   disabled: false
+
+- insert:
+
+- insert:
+    - id: im-qqbot-3
+      name: '@zaofan/dsh-qqbot'
+      config:
+        appId: '1905996256'
+        appSecret: AsbK4oZK6sfTH6vlbSJB4xrlgbXTQNLK
+        settingsNs: 'im-qqbot-3'
+        preset: 'shenjing'
+        requireMention: false
+        historyLimit: 20
+        cwd: '/root/Documents/deepseek/harness/default/workspace'
+      disabled: false
