@@ -4,12 +4,13 @@
     "payload/runtime/memories.json": "e5dcd0a80f079c1bc65e3a3b1f2577f466b16755e8fd777c5962d6044a3cece2",
     "payload/runtime/USER.md": "9fafc3b63bc72eaf9d512ea9dbdb34758db84227d2ce747c74af54dd61dcf701",
     "payload/runtime/MEMORY.md": "ccb307cc7c8226885728c367ed4ed076a8f49d0a872681409ee4435c528b56c6",
-    "payload/documents/index.json": "4a5b36d1828d532c9184618d1a4d6559405fb8180ce3afc9ed9955682d8bea9a",
+    "payload/documents/index.json": "5a4f5c7bd8e4f4931bb2066b10384f007389891172d8dae8b41874942db50c21",
     "payload/documents/active/document-f08e1253.md": "3890048cf979baabffb8aa33482c384da5a2fad3f8110e95fb7289a37a246934",
     "payload/documents/active/shenjing-preset-agent-f020768f.md": "d540fe75dd5a85bb9fbb7b1681f4b218a468af9bc0fa395edf4f5d3c766988bf",
     "payload/documents/active/dsh-bili-scroll-aarch64-uv-f4e00ab9.md": "11c0677fe12f8c8bc370f779deead3d15f6ee314ffc5c8f960e790cf32652d89",
     "payload/documents/active/b-dsh-bili-scroll-asr-d9e89150.md": "88c352fac66bd61e19eb063764c8e410e632d2c79440a40c070459c837e01a7e",
     "payload/documents/active/dsh-web-dsh-plugin-tts-c51d380c.md": "04ccd8eee93b62faff13bd2316876ac7f88da5998c1442402e5bdedf7c4cf5a4",
+    "payload/documents/active/gpt-sovits-v2-2026-10-25-daa0aa17.md": "b254a6da11d917ba0db9270772f1401cc6df5bb2bbe96d43bb56146341d42ec2",
     "payload/data/.dsh-memory-bodies.json": "dc6020b75bab2ed6109193aea9c3427c22d9d2b6edd223c4c8c6cd87ad0c67dd"
   }
 }

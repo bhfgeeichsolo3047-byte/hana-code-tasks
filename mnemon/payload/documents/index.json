@@ -110,6 +110,29 @@
       "contentHash": "40a953cf0cfd17ff684fe9f8efd44e50ca9f8fc75490aab9736d56dd083a4b2b",
       "sizeBytes": 3588,
       "memoryBodyIds": []
+    },
+    {
+      "id": "daa0aa17-539a-4839-ad68-9e9a47fe9aea",
+      "title": "大肥鱼 GPT-SoVITS v2 音色训练与交付（2026-10-25）",
+      "description": "纯 CPU 训出 daFeiYu 音色的完整参数、三句客观验收数据、五个必须记住的坑（custom 键、假 EXIT=0、缺失输出目录、generator/resampy、rich 假失败），以及样本推送到记忆 git 仓库的位置。",
+      "status": "active",
+      "filename": "gpt-sovits-v2-2026-10-25-daa0aa17.md",
+      "relativePath": "documents/active/gpt-sovits-v2-2026-10-25-daa0aa17.md",
+      "sourcePaths": [
+        "deliver/manifest.json",
+        "deliver/README.md",
+        "deliver/samples/text.txt"
+      ],
+      "sessionIds": [
+        "session-871be7a0-e696-4d73-a893-3a7ba9a0c96a"
+      ],
+      "createdAt": "2026-10-25T11:02:53.034Z",
+      "updatedAt": "2026-10-25T11:02:53.034Z",
+      "lastAccessedAt": "2026-10-25T11:02:53.034Z",
+      "revision": 1,
+      "contentHash": "bf2f3fef50d2f24854d35455abb8ec5320846d81954ec117f3568a899670e2af",
+      "sizeBytes": 4357,
+      "memoryBodyIds": []
     }
   ]
 }
