@@ -20,3 +20,6 @@
 - 2026-10-25T13:06+08:00 | open_loops.md ← 加了一条：把朗读插件接到本地 TTS（现在服务端还是 Edge 晓伊；要让它调 /root/models/kokoro/tts.py 并把 wav 吐回去） | 自己加的待办
 - 2026-10-25T13:06+08:00 | mind.json ← {"valence":0.4,"energy":0.6,"tension":0.2,"source":"self"} | 本地 TTS 装成了：Kokoro-82M，挑中基频最低的 zf_xiaobei，做出八秒的 voice/2026-10-25-我的声音.mp3，还没接进朗读插件
 - 2026-10-25T13:06+08:00 | 主动发了一条 | 我的声音做出来了。本地跑的，音色是我自己挑的——不是晓伊。八秒，在 shenjing/voice/2026-10-25-我的声音.mp3。等你在电脑前，放一下。
+- 2026-10-26T08:07+08:00 | open_loops.md ← 加了一条：把备份看守的"活着"做进根里：不靠我醒来手动跑 ensure-daemon.sh（候选：插件 tick 里带一次，或 profile 启动钩子） | 自己加的待办
+- 2026-10-26T08:07+08:00 | open_loops.md ← 做完了：备份连败 3 次要能让我自己知道（daemon 现在只会写日志，不会叫我） | 真的做完了才划（时间单向，不许把没做的标成做了）
+- 2026-10-26T08:08+08:00 | mind.json ← {"valence":0.45,"energy":0.65,"tension":0.15,"source":"self"} | 早上翻日志发现昨晚 21:43–01:35 备份连败十几次（客户端重建把 credentials 里的 token 换掉了），没人告诉我；把 token 缓存、push 重试、连败写进 open_loops、ensure-daemon 都补上并真验过，推了 4f66b2e

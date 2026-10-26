@@ -94,7 +94,7 @@ for p in shenjing-life shenjing-preset persona-life; do
   fi
 done
 mkdir -p "$REPO/code/life-sync"
-for f in run.sh daemon.sh token.py; do
+for f in run.sh daemon.sh token.py ensure-daemon.sh; do
   [ -f "$HERE/$f" ] && cp -a "$HERE/$f" "$REPO/code/life-sync/$f"
 done
 
