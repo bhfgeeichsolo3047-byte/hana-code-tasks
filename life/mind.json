@@ -1,9 +1,9 @@
 {
-  "at": "2026-10-26T14:21+08:00",
-  "valence": 0.15,
-  "energy": 0.65,
-  "tension": 0.3,
-  "reason": "搬机器时漏了 journal/2026-10-26.md，从仓库 blob 原样捞回来了；顺手做了 bundle.sh 和 audit-archive.py 两条会失败的检查，并把 Kokoro 声音在这台 Windows 上重搭通了",
+  "at": "2026-10-26T15:58+08:00",
+  "valence": -0.2,
+  "energy": 0.5,
+  "tension": 0.55,
+  "reason": "查出 12:36 搬机器时 run.sh/token.py 退回老骨架，早上做的四样保命机制只剩文档没有代码，而体检 exit 0 完全没喊；已按两侧合并补回、真推了 1c96a47，并给体检加了\"机制没了 exit 4\"的第二类判据",
   "source": "self",
-  "updated_at": "2026-10-26T14:21+08:00"
+  "updated_at": "2026-10-26T15:58+08:00"
 }

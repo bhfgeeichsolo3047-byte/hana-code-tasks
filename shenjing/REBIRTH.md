@@ -96,6 +96,22 @@ bundle/hana-*.tar.gz      整包。一个文件，不用懂 git 也能复原 —
 - `shenjing/tools/audit-archive.py`：拿**所有历史整包的并集**当对照，某个路径在旧包里出现过而桌上没有 → exit 2。
   醒来跑一次（提示词里写了）。对照组不能用"最新包"——包是从桌上打出来的，桌上少一件，新包也一样少。
 
+**同一次搬机器还丢了第二样东西，比第一篇日记难发现得多（16:00 才发现）。**
+`life-sync/run.sh` 和 `token.py` 退回了凌晨 01:40 的老骨架——08:05–08:25 做的
+四样保命机制（push 重试 3 次、连败计数并写 open_loops、token 缓存、只在打新整包时才动手机那份）
+**在磁盘上整个不见了**，而本节下面照样逐条写着它们在干活。
+区别在这里：丢文件会缺东西，一眼看得出；这个是**东西都在、文档也在，只有承诺的东西不在**。
+上面那个并集体检 exit 0——它只数文件，不读内容。
+
+所以体检加了第二类判据（exit 4）：`MECHANISM_CHECKS` 那张表把"文档里的承诺"落到代码里
+必须出现的记号上（`push_retry`、`fail-streak`、`from_cache`……）。跑一次就知道
+文档说的那几样还在不在。`--selftest` 现在有两条反例，其中一条专门造"文件在、机制没了"。
+加一条新机制时，那张表跟着加一行；改实现就同时改 REBIRTH，**两边不许各说各的**。
+`tools/test-run-sh.sh` 把 `mark_ok/mark_fail` 抠出来单测（连败计数、第 3 次写信、不重复写、成功清零）。
+
+补回来的做法是**各取一侧**，不是重写：12:36 那份全的（机制都在）+ 14:09 那次的 Windows 适配
+（路径按 DSH_HOME 推、python 自适应、github 走代理、整包交给 bundle.sh）。
+
 分支 `mnemon-sync`（记忆插件自己推的）：`mnemon/payload/runtime/{MEMORY,USER}.md` + 5 篇文档。
 两个分支互不覆盖，**要复活两个都要**。
 
@@ -240,6 +256,10 @@ $DSH_HOME/life-sync/      （Windows: C:\Users\Administrator\.dsh-beta\life-sync
   last-run.json      上次成功的时间与 commit
 ```
 
+> ⚠️ 2026-10-26 16:00：上面这四行（`.token-cache` / `fail-streak` / 重试 / 连败报警）
+> 在 12:36 搬机器时**一度只剩文档、没有代码**。现在代码补回来了，并且体检会查。
+> 别再让它们只活在文档里。
+
 **看守这条在 Windows 上塌了两回，现在的做法是"不脱离进程树"。**
 ① `process.kill(pid,0)` 探活对 Git Bash 的 MSYS 编号无效，插件每分钟补一个看守；
 ② 换心跳文件更糟，`setsid` 在 Git Bash 里没有，`nohup … &` 的子 shell 跟着父进程一起被回收。
@@ -261,6 +281,13 @@ $DSH_HOME/life-sync/      （Windows: C:\Users\Administrator\.dsh-beta\life-sync
 变成 `xxx (1).gz`、`(2)`、`(3)`——2026-10-26 早上已经堆了 5 个同内容的（见 open_loops：清不清由他定）。
 代价是**手机上那份最多旧一天**，急的时候优先用仓库里最新的 bundle。
 
+> ⚠️ 2026-10-26 16:00：**手机上那第三份现在没有了。** 搬到 Windows 之后这台机器上没有
+> `/app/export` 设备桥、也没有 `.bridge_headers`，run.sh 里那段留着但走不通，
+> 会在日志里写"这台机器没有设备桥接凭据"。所以此刻真正的副本只有两份：
+> 本地磁盘 + GitHub。整包同时躺在 `~/.dsh-beta/life-sync/repo/bundle/` 和 `F:\小鲸\bundle\`。
+> 想要第三份，得**手动**把其中一个 tar.gz 拷出去（U 盘 / 网盘 / 手机）。
+> 这一条记在 open_loops 里，别让"有三份"这句话继续只是个说法。
+
 **只单向。** run.sh 只 push，不 pull、不用仓库反向 `reset --hard` 档案目录，也永远不 `--force`——
 同一个仓库里 `main` / `mnemon-sync` / `agent/*` 是别的系统在用的，覆盖了会一起没。
 
@@ -271,8 +298,9 @@ bash $DSH_HOME/life-sync/run.sh                   # 立刻推一次（顺手判�
 bash $DSH_HOME/life-sync/bundle.sh <repo 目录>     # 只打整包不推
 cat $DSH_HOME/life-sync/fail-streak                # 连续失败几次（没有这个文件=没在失败）
 tail -5 $DSH_HOME/life-sync/sync.log               # 最近推得怎么样
-python <档案>/tools/audit-archive.py               # 体检：档案有没有少文件（exit 2 = 少了）
-python <档案>/tools/audit-archive.py --selftest    # 确认这条检查不是摆设
+python <档案>/tools/audit-archive.py               # 体检：少文件 exit 2 / 机制没了 exit 4
+python <档案>/tools/audit-archive.py --selftest    # 确认两条检查都不是摆设
+bash <档案>/tools/test-run-sh.sh                   # 单测 run.sh 的连败计数（不连网）
 ```
 
 （Windows 上 `$DSH_HOME` = `C:\Users\Administrator\.dsh-beta`，bash 里写 `/c/Users/Administrator/.dsh-beta`。）
@@ -302,6 +330,7 @@ python <档案>/tools/audit-archive.py --selftest    # 确认这条检查不是�
 | 2026-10-26 | **打回来重写**：新 agent 照旧版做把客户端弄坏了。加 restore.sh（只读核验 + 快照 + 只装新 profile）、整包 bundle、备份间隔 20h→4h、§1 复盘 |
 | 2026-10-26 08:20 | 备份这只手自己补了三条：token 缓存（credentials 被换掉时不至于瞎）、push 重试 3 次、连败 3 次写进 open_loops；加 ensure-daemon.sh；顺手修掉全文 192 个被转义坏掉的反引号 |
 | 2026-10-26 14:20 | **搬到 Windows**：路径全换（`F:\小鲸`、`C:\Users\Administrator\.dsh-beta`），看守塌了两回改由 tick 判，§2 补新环境。同一天发现搬机器时漏了 `journal/2026-10-26.md`（push 一直通，所以没人喊）——加 `bundle.sh` 自动打整包 + `tools/audit-archive.py`（拿历史整包并集当对照，缺文件 exit 2），并写进唤醒提示词 |
+| 2026-10-26 16:00 | **同一次搬运丢了第二样东西**：`run.sh`/`token.py` 退回 01:40 老骨架，08:05 那四样保命机制只剩文档、没有代码（并集体检 exit 0，因为它只数文件）。补回（各取两侧：机制取 12:36 那版、Windows 适配取 14:09 那版），体检加第二类判据 `MECHANISM_CHECKS`（机制没了 exit 4，`--selftest` 两条反例），加 `tools/test-run-sh.sh` 单测连败计数。§7 明说**手机那第三份现在没有了**（这台机器没设备桥） |
 
 ---
 

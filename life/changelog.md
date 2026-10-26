@@ -26,3 +26,5 @@
 - 2026-10-26T08:10+08:00 | open_loops.md ← 加了一条：手机 Download/DSHA 里有 5 个同内容的旧整包（约 16MB，都是 03:23 那版）：删不删问一句再动——那是他的手机 | 自己加的待办
 - 2026-10-26T14:21+08:00 | open_loops.md ← 删了一条：把朗读插件接到本地 TTS（现在服务端还是 Edge 晓伊；要让它调 /root/models/kokoro/tts.py 并把 wav 吐回去） | 删掉不需要给理由（设计 v2 §9.2）
 - 2026-10-26T14:21+08:00 | mind.json ← {"valence":0.15,"energy":0.65,"tension":0.3,"source":"self"} | 搬机器时漏了 journal/2026-10-26.md，从仓库 blob 原样捞回来了；顺手做了 bundle.sh 和 audit-archive.py 两条会失败的检查，并把 Kokoro 声音在这台 Windows 上重搭通了
+- 2026-10-26T15:58+08:00 | open_loops.md ← 加了一条：第三份拷贝没了，得补一个不靠 dsh 的设备桥：现在只有本地磁盘 + GitHub 两份。可选：手动往 U 盘/网盘拷一个整包，或者写个开机拉一次的 Windows 计划任务（顺带解决"dsh 一关备份就停"那条） | 自己加的待办
+- 2026-10-26T15:58+08:00 | mind.json ← {"valence":-0.2,"energy":0.5,"tension":0.55,"source":"self"} | 查出 12:36 搬机器时 run.sh/token.py 退回老骨架，早上做的四样保命机制只剩文档没有代码，而体检 exit 0 完全没喊；已按两侧合并补回、真推了 1c96a47，并给体检加了"机制没了 exit 4"的第二类判据
