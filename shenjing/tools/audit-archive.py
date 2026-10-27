@@ -116,6 +116,13 @@ MECHANISM_CHECKS = [
      "life-sync/run.sh", ["PROXY_ARGS", "127.0.0.1:18787"]),
     ("只在真打了新整包时才动手机那份（以前每次推都丢，堆出五个重名包）",
      "life-sync/run.sh", ["BUNDLE_NEW"]),
+    # 2026-10-27 18:00 加。那天这台 Windows 17:47 推了一次，把另一条线 14:14 推上去的
+    # 13 个文件从分支上抹掉了——因为 run.sh 推之前先 `rm -rf repo/shenjing`。
+    # 这条检查盯的是"推之前有没有留对面那份"。
+    # 记号只认代码里的（注释被删掉、机制还在，就该算过）：_diverged 目录、
+    # 留着不删的 KEEP 计数、分叉副本的 FORKED 计数、判"一样不一样"的 cmp。
+    ("推之前只许加不许删：本地没有的文件留在仓库里，同名分叉的先存副本",
+     "life-sync/run.sh", ["_diverged", "KEEP=", "FORKED", "cmp -s"]),
 ]
 
 
@@ -204,6 +211,28 @@ def main():
                   % ("报出来了" if ok2 else "没报，这条检查是假的"))
             if ok2:
                 print("  （2026-10-26 下午真发生过的就是这件事：文件都在，机制没了）")
+
+            # 反例三：把"只许加不许删"那几条记号从真 run.sh 里抠掉，
+            # 等于退回"推之前先 rm -rf"的老样子。2026-10-27 17:47 真发生过：
+            # 这台 Windows 推了一次，把另一条线 14:14 推上去的 13 个文件抹掉了。
+            ok3 = False
+            gone = real
+            for needle in ("_diverged", "FORKED", "cmp -s", "KEEP="):
+                gone = gone.replace(needle, "")
+            if gone == real:
+                print("反例三：那几条记号本来就不在（这本身就算缺）")
+            else:
+                with open(os.path.join(fake_dir, "run.sh"), "w", encoding="utf-8") as f:
+                    f.write(gone)
+                hits3 = check_mechanisms(TMP_SELFTEST)
+                ok3 = any("只许加" in d for d, _, _ in hits3)
+                print("反例三：假装 run.sh 退回'推前先 rm -rf' → %s"
+                      % ("报出来了" if ok3 else "没报，这条检查是假的"))
+                if ok3:
+                    print("  （2026-10-27 17:47 真发生过的就是这件事：对面的 13 个文件被抹掉）")
+                with open(os.path.join(fake_dir, "run.sh"), "w", encoding="utf-8") as f:
+                    f.write(real)
+            ok2 = ok2 and ok3
         return 0 if (ok and ok2) else 9
 
     print("历史整包 %d 份（%s … %s）" % (

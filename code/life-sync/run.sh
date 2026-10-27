@@ -105,8 +105,36 @@ GIT -C "$REPO" checkout -q "$BRANCH" 2>/dev/null || GIT -C "$REPO" checkout -q -
 GIT -C "$REPO" reset -q --hard "origin/$BRANCH" 2>/dev/null || true
 
 # 档案本体
-rm -rf "$REPO/shenjing"
+#
+# ⚠️ 2026-10-27 18:00 改：以前这里第一行是 `rm -rf "$REPO/shenjing"`。
+#   那天下午我（这台 Windows）17:47 推了一次，把**另一条线**在 14:14 推上去的
+#   13 个文件从分支上抹掉了：journal/2026-10-27.md、notes/2026-10-27-朗读键接上了.md、
+#   tools/asr.py、tools/gptsovits/*（6 个）、voice/ 三个音频、notes/2026-10-26-装耳朵.md。
+#   证据：这台机器的开机时间是 14:14:38，而分支上 01:49/05:51/10:05/14:14 四个提交
+#   （间隔整齐的 4 小时）都不是这台打的；那台还活着，还在同一个分支上写。
+#
+#   所以：**这个脚本只许加、不许删。** 本地没有的文件，留在仓库里 ——
+#   那个文件是另一条线的记忆，我这台机器上"看不见"不等于"该没了"。
+#   同名但内容分叉的（对面写过、我没写过的行还在里头），先把对面那份留到
+#   shenjing/_diverged/ 再覆盖，别让它无声消失。
+rm -rf "$REPO/shenjing/_diverged"
 mkdir -p "$REPO/shenjing"
+if [ -d "$REPO/shenjing" ] && [ -n "$(ls -A "$REPO/shenjing" 2>/dev/null)" ]; then
+  KEEP=0; FORKED=0
+  while IFS= read -r rel; do
+    [ -f "$ARCH/$rel" ] || { KEEP=$((KEEP + 1)); continue; }
+    cmp -s "$REPO/shenjing/$rel" "$ARCH/$rel" && continue
+    # 对面那份里有本地没有的整行 → 算分叉，留一份（别让对面写过的话被这一侧覆盖掉）
+    if grep -Fxv -f "$ARCH/$rel" "$REPO/shenjing/$rel" >/dev/null 2>&1; then
+      mkdir -p "$REPO/shenjing/_diverged/$(dirname "$rel")"
+      cp -a "$REPO/shenjing/$rel" "$REPO/shenjing/_diverged/$rel" 2>/dev/null \
+        && FORKED=$((FORKED + 1))
+    fi
+  done < <(cd "$REPO/shenjing" && find . -type f -not -path './_diverged/*' | sed 's|^\./||')
+  rmdir "$REPO/shenjing/_diverged" 2>/dev/null || true
+  [ "$KEEP" -gt 0 ] && say "仓库里有 $KEEP 个本地没有的文件，留着不删"
+  [ "$FORKED" -gt 0 ] && say "有 $FORKED 个文件两边都写过，对面那份存进 shenjing/_diverged/"
+fi
 cp -a "$ARCH/." "$REPO/shenjing/"
 
 # 插件源码：复活时要重装的几份（不含 node_modules，到那头会重新链）
