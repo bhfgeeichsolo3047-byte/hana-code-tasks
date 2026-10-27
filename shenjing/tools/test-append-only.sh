@@ -57,6 +57,11 @@ echo "another line only"                              > "$REPO/shenjing/journal/
 printf "line A\nline B\nline from the other window\n" > "$REPO/shenjing/self.md"
 printf "line A\nline B\nline from this window\n"      > "$ARCH/self.md"
 printf "same\n"                                       > "$REPO/shenjing/journal/2026-10-22.md"
+# 上一次推存下的分叉存档：这一次推不许把它清掉。
+# 2026-10-27 21:30 真踩到过：那段第一行是 `rm -rf $REPO/shenjing/_diverged`，
+# 于是每次推都把历史存档清空、只留这一批 —— 体检新加的 exit 6 第一次跑就报了 3 份。
+mkdir -p "$REPO/shenjing/_diverged/journal"
+echo "an older fork, from a push long ago" > "$REPO/shenjing/_diverged/journal/2026-10-20.md"
 printf "same\n"                                       > "$ARCH/journal/2026-10-22.md"
 
 eval "$(grab '^rm -rf "\$REPO\/shenjing' '^cp -a "\$ARCH\/\."' 'shenjing/ 那段')"
@@ -71,6 +76,12 @@ chk "③ 本地文件覆盖上去了" "$(grep -c 'this window' "$REPO/shenjing/s
 [ -f "$REPO/shenjing/_diverged/journal/2026-10-22.md" ] && r=有 || r=无
 chk "③ 内容一样的不算分叉" "$r" "无"
 chk "日志说了一句" "$(grep -c '本地没有的文件' "$LOG")" "1"
+[ -f "$REPO/shenjing/_diverged/journal/2026-10-20.md" ] && r=在 || r=没了
+chk "⑤ 上一次的分叉存档没被清掉" "$r" "在"
+# 同一个文件第二次分叉时不许覆盖第一次存的那份 —— 第一次才是"被覆盖之前的原样"
+echo "second round, different content" > "$REPO/shenjing/self.md"
+eval "$(grab '^rm -rf "\$REPO\/shenjing' '^cp -a "\$ARCH\/\."' 'shenjing/ 那段')"
+chk "⑤ 老存档内容没被新一次覆盖" "$(grep -c 'other window' "$REPO/shenjing/_diverged/self.md" 2>/dev/null || echo 0)" "1"
 
 # ── 第二组：code/ 与 life/ ───────────────────────────────────────────────
 # 造一个"对面写过、这台没有"的插件文件，和一个两边都写过的 changelog。

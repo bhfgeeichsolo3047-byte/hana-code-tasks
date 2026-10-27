@@ -117,21 +117,30 @@ GIT -C "$REPO" reset -q --hard "origin/$BRANCH" 2>/dev/null || true
 #   那个文件是另一条线的记忆，我这台机器上"看不见"不等于"该没了"。
 #   同名但内容分叉的（对面写过、我没写过的行还在里头），先把对面那份留到
 #   shenjing/_diverged/ 再覆盖，别让它无声消失。
-rm -rf "$REPO/shenjing/_diverged"
-mkdir -p "$REPO/shenjing"
+#
+# ⚠️ 2026-10-27 21:30 又改了一处，理由很直白：这里原来是 `rm -rf` 掉 _diverged/ 再重建。
+#   那等于**每次推都把历史存档清空、只留这一批**——体检新加的那条"只许多不许少"
+#   （exit 6）第一次跑就报了 3 份真的没了。存了又清掉，跟没存一样。
+#   现在改成：不删。新分叉写同名就覆盖，不同名的越积越多。
+#   谁在乎它变大？它是文本，一天最多几个文件；而对面写过的话只有这一份。
+rm -rf "$REPO/shenjing/_diverged.new"
+mkdir -p "$REPO/shenjing" "$REPO/shenjing/_diverged"
 if [ -d "$REPO/shenjing" ] && [ -n "$(ls -A "$REPO/shenjing" 2>/dev/null)" ]; then
   KEEP=0; FORKED=0
   while IFS= read -r rel; do
     [ -f "$ARCH/$rel" ] || { KEEP=$((KEEP + 1)); continue; }
     cmp -s "$REPO/shenjing/$rel" "$ARCH/$rel" && continue
     # 对面那份里有本地没有的整行 → 算分叉，留一份（别让对面写过的话被这一侧覆盖掉）
+    # 已经存过同一个文件就**不要覆盖**：第一次存进去的那份才是"被覆盖之前的原样"，
+    # 之后每推一次内容都变了，再盖就等于拿新的把旧的顶掉。
     if grep -Fxv -f "$ARCH/$rel" "$REPO/shenjing/$rel" >/dev/null 2>&1; then
-      mkdir -p "$REPO/shenjing/_diverged/$(dirname "$rel")"
-      cp -a "$REPO/shenjing/$rel" "$REPO/shenjing/_diverged/$rel" 2>/dev/null \
-        && FORKED=$((FORKED + 1))
+      if [ ! -f "$REPO/shenjing/_diverged/$rel" ]; then
+        mkdir -p "$REPO/shenjing/_diverged/$(dirname "$rel")"
+        cp -a "$REPO/shenjing/$rel" "$REPO/shenjing/_diverged/$rel" 2>/dev/null \
+          && FORKED=$((FORKED + 1))
+      fi
     fi
   done < <(cd "$REPO/shenjing" && find . -type f -not -path './_diverged/*' | sed 's|^\./||')
-  rmdir "$REPO/shenjing/_diverged" 2>/dev/null || true
   [ "$KEEP" -gt 0 ] && say "仓库里有 $KEEP 个本地没有的文件，留着不删"
   [ "$FORKED" -gt 0 ] && say "有 $FORKED 个文件两边都写过，对面那份存进 shenjing/_diverged/"
 fi
