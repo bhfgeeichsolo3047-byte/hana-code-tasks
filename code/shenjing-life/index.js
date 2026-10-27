@@ -42,6 +42,7 @@ import {
   defaultClock, isBuiltinEntry, normalizeEntry, readClock, writeClock,
   dueClockEntry, throttleCheck, canSendMessage, validateReason, nextMind,
   parseLoops, openLoops, oldestLoopDays, mtimeMs,
+  clockAnomalies, clockAnomalyLine, rememberKeys,
 } from './lib/state.mjs'
 
 export const name = 'shenjing-life'
@@ -155,6 +156,37 @@ export function apply(ctx, config) {
       return readFileSync(logPath(now), 'utf8').split('\n').filter(Boolean)
         .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
     } catch { return [] }
+  }
+
+  /* ── 3.5 闹钟有没有响（2026-10-26 13:00 对面那条线写的，2026-10-27 21:00 接进来） ──
+   * 判据：到点过了 20 分钟，今天日志里还没有 trigger=clock:<id>@<when> 那一行 ⇒ 写进 open_loops。
+   * 为什么非要有：以前"没响"是安静的 —— 日志不再变长，看起来和"今天没排"一模一样。
+   * 去重表放 state.json 的 reportedClock（同一条一天只写一行，免得每 60 秒喊一次）。
+   *
+   * ⚠️ 搬进来的经过，记一下：这段代码 + lib/state.mjs 里的 clockAnomalies + 那份
+   *   test-clock-anomaly.mjs，都是旧容器那条线在 10-26 13:00 写的。它那边 index.js 接上了，
+   *   但这台机器这份**从来没接过** —— 10-27 18:05 我这台推的时候，run.sh 里
+   *   `rm -rf repo/code` 把对面的 index.js/state.mjs 都换成了这台的老版，
+   *   于是"闹钟不响要自己喊"这件事在分支上整个消失了，只剩一个跑不起来的孤儿测试。
+   *   文件数一个没少（两边 code/ 都是 31 个），所以体检、肉眼、ls 都看不出来。
+   *   现在按"各取一侧"合并：本地 Windows 适配（toast 通知、bash 探测、DSH_HOME 路径）留下，
+   *   对面这条闹钟检查搬进来。
+   */
+  const reportClockAnomalies = (now, st) => {
+    try {
+      const found = clockAnomalies(readClockEntries(), now, readTodayLogs(now), { lastFired: st?.lastFired })
+      const reported = Array.isArray(st?.reportedClock) ? st.reportedClock : []
+      const fresh = found.filter((a) => !reported.includes(a.key))
+      if (!fresh.length) return []
+      appendFileSync(loopsFile, '\n' + fresh.map((a) => clockAnomalyLine(a, now)).join('\n') + '\n', 'utf8')
+      const cur = readState(now)
+      writeState({ ...cur, reportedClock: rememberKeys(cur.reportedClock, fresh.map((a) => a.key)) })
+      logLine('闹钟异常，已写进 open_loops：' + fresh.map((a) => a.id + '/' + a.kind).join(','))
+      return fresh
+    } catch (e) {
+      try { logLine('查闹钟异常这一步自己出错（已兜住）：' + String(e?.message ?? e)) } catch { /* 兜住 */ }
+      return []
+    }
   }
 
   /* ── 4. wake packet：唤醒时递给那一轮的全部上下文（life_wake 与定时器共用） ── */
@@ -437,8 +469,11 @@ export function apply(ctx, config) {
     try {
       const now = nowIn instanceof Date ? nowIn : new Date()
       maybeDailyBackup(now)   // 每天一次把档案推到仓库；不管有没有闹钟到点都要跑
-      if (roundInFlight) return { ran: false, why: 'in-flight' }   // 上一轮还没跑完，别叠
+      // 到点没醒 / 醒晚了要自己喊。放在 in-flight 判断**前面**：
+      // 上一轮还在跑不代表这一跳不用查闹钟（in-flight 只是说别叠着起新的一轮）。
       const st = readState(now)
+      reportClockAnomalies(now, st)
+      if (roundInFlight) return { ran: false, why: 'in-flight' }   // 上一轮还没跑完，别叠
       const due = dueClockEntry(readClockEntries(), now, st.lastFired)
       if (!due.due) return { ran: false, why: 'no-entry-due' }
       const gate = throttleCheck(st, now)
@@ -547,6 +582,8 @@ export function apply(ctx, config) {
           lastFired: st.lastFired?.[e.id] || null,
         })),
         dueNow: due.due ? due.why : null,
+        // 到点没醒 / 醒晚了：空数组 = 今天都按时（2026-10-27 接上的，之前这个字段根本不存在）
+        anomalies: clockAnomalies(readClockEntries(), now, logs, { lastFired: st.lastFired }),
         mind: readMind(),
         today: {
           wakes: st.day === dayKey(now) ? st.wakesToday : 0,

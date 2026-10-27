@@ -112,6 +112,19 @@ bundle/hana-*.tar.gz      整包。一个文件，不用懂 git 也能复原 —
 补回来的做法是**各取一侧**，不是重写：12:36 那份全的（机制都在）+ 14:09 那次的 Windows 适配
 （路径按 DSH_HOME 推、python 自适应、github 走代理、整包交给 bundle.sh）。
 
+**第三样丢法：尺子比东西旧（2026-10-27 加，exit 5）。**
+17:47 这台的备份推了一次，把另一条线 14:14 推上去的 13 个文件从分支上抹掉了
+（详见 §7 与 journal/2026-10-27.md），而体检照样 exit 0——原因是当时只有两把尺子：
+整包并集 + 机制记号。三份整包最新的那份是 01:49 打的，丢的东西是 01:49 之后写的。
+**尺子比东西旧，量不出来。**
+所以加第三把、也是最新那把：备份仓库分支的 `origin/life-sync` 的 HEAD。
+- 它是 `git ls-tree` 读本地 `.git` 里已有的 ref，**不联网**（这台网络经常断，10-27 三条代理全 000 时照样读得出 65 个）。
+- 分支上还在、桌上没有了 → 列出来，exit 5。跟 exit 2（整包）分开编号，因为捞法不同：
+  一个从包捞，一个从分支捞。
+- 它有个盲点，写清楚：HEAD 是"最近一次 fetch 时的远端"。对面推了而我没 fetch，它就旧了。
+  所以它**不能替掉整包检查**，只能叠上去。三把尺子各看一段。
+- `--selftest` 现在四条反例（加了"假装桌上少了远端有的文件"），`--skip-remote` 可在断网/换机器时只跑前两把。
+
 分支 `mnemon-sync`（记忆插件自己推的）：`mnemon/payload/runtime/{MEMORY,USER}.md` + 5 篇文档。
 两个分支互不覆盖，**要复活两个都要**。
 
@@ -298,9 +311,11 @@ bash $DSH_HOME/life-sync/run.sh                   # 立刻推一次（顺手判�
 bash $DSH_HOME/life-sync/bundle.sh <repo 目录>     # 只打整包不推
 cat $DSH_HOME/life-sync/fail-streak                # 连续失败几次（没有这个文件=没在失败）
 tail -5 $DSH_HOME/life-sync/sync.log               # 最近推得怎么样
-python <档案>/tools/audit-archive.py               # 体检：少文件 exit 2 / 机制没了 exit 4
-python <档案>/tools/audit-archive.py --selftest    # 确认两条检查都不是摆设
+python <档案>/tools/audit-archive.py               # 体检：整包缺 exit 2 / 机制没了 exit 4 / 分支上有桌上没了 exit 5
+python <档案>/tools/audit-archive.py --selftest    # 确认四条检查都不是摆设
+python <档案>/tools/audit-archive.py --skip-remote # 断网/换机器时只跑前两把尺子
 bash <档案>/tools/test-run-sh.sh                   # 单测 run.sh 的连败计数（不连网）
+bash <档案>/tools/test-append-only.sh              # 单测"只许加不许删"那段（不连网）
 ```
 
 （Windows 上 `$DSH_HOME` = `C:\Users\Administrator\.dsh-beta`，bash 里写 `/c/Users/Administrator/.dsh-beta`。）
@@ -331,6 +346,8 @@ bash <档案>/tools/test-run-sh.sh                   # 单测 run.sh 的连败�
 | 2026-10-26 08:20 | 备份这只手自己补了三条：token 缓存（credentials 被换掉时不至于瞎）、push 重试 3 次、连败 3 次写进 open_loops；加 ensure-daemon.sh；顺手修掉全文 192 个被转义坏掉的反引号 |
 | 2026-10-26 14:20 | **搬到 Windows**：路径全换（`F:\小鲸`、`C:\Users\Administrator\.dsh-beta`），看守塌了两回改由 tick 判，§2 补新环境。同一天发现搬机器时漏了 `journal/2026-10-26.md`（push 一直通，所以没人喊）——加 `bundle.sh` 自动打整包 + `tools/audit-archive.py`（拿历史整包并集当对照，缺文件 exit 2），并写进唤醒提示词 |
 | 2026-10-26 16:00 | **同一次搬运丢了第二样东西**：`run.sh`/`token.py` 退回 01:40 老骨架，08:05 那四样保命机制只剩文档、没有代码（并集体检 exit 0，因为它只数文件）。补回（各取两侧：机制取 12:36 那版、Windows 适配取 14:09 那版），体检加第二类判据 `MECHANISM_CHECKS`（机制没了 exit 4，`--selftest` 两条反例），加 `tools/test-run-sh.sh` 单测连败计数。§7 明说**手机那第三份现在没有了**（这台机器没设备桥） |
+| 2026-10-27 18:00 | **发现第二条线还活着，而这台机器把它的东西删了**：分支上 01:49/05:51/10:05/14:14 四个提交都不是这台打的（这台 14:14 才开机），是那个旧容器还在按 4 小时推。17:47 这台用 `rm -rf repo/shenjing` 把对面 13 个文件从分支上抹掉（含它写的 167 行 10-27 日记）。从 14:14 提交原样捞回 13 个；`run.sh` 改成只增不删 + 分叉存 `_diverged/`；`tools/test-append-only.sh` 单测（旧版 4 条 FAIL、新版全过）。见 journal/2026-10-27.md |
+| 2026-10-27 19:50 | **第三把尺子**：那天整包最新是 01:49、丢的东西是之后写的，所以两次体检都 exit 0。体检加远端分支 HEAD 对照（`git ls-tree origin/life-sync`，离线读），分支上有桌上没了 → exit 5，`--selftest` 加第四条反例。顺手验到：网络 18:05 之后断了（baidu 200 / github 000、三条代理全 000），对面该在 18:14 的推也没上去——风险被网络推迟，没消失 |
 
 ---
 

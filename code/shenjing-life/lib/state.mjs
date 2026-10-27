@@ -36,6 +36,9 @@ export const MAX_STRETCH = 4
  *    ③ 这台机器上档案真正待的地方（F:\小鲸\shenjing）
  *    ④ 老线 /root/…（万一哪天又回容器里跑）
  *  只读判断，不建目录 —— 档案不该被程序"顺手"造出来。
+ *  ⚠️ 2026-10-27 20:30：这段是从这台机器的版本里搬回来的。对面（旧容器）那份
+ *  还写着 /root/… 的常量，因为它在那边是对的。**两边各自的环境适配都要留着**，
+ *  这跟"谁新"无关。
  */
 function pickArchiveDir() {
   const env = String(process.env.SHENJING_ARCHIVE || '').trim() || String(process.env.DSH_ARCHIVE_DIR || '').trim()
@@ -133,6 +136,82 @@ export function isSilentAt(minuteOfDay, startMin = SILENCE_START_MIN, endMin = S
   const cur = ((Math.floor(m) % 1440) + 1440) % 1440
   if (startMin <= endMin) return cur >= startMin && cur < endMin
   return cur >= startMin || cur < endMin       // 跨零点的写法留着（万一以后改成 22:00–07:30）
+}
+
+/* ───────────────────────── 闹钟有没有响 ─────────────────────────
+ * 2026-10-26 13:00 加。判据只有一句：**到点了，日志里没有那一行，就是没响。**
+ * 以前"没响"没有任何东西会说 —— 日志只是安静地不长，看起来和"没到点"一模一样。
+ * 这里只算，不写文件；写 open_loops 的两条路（插件 tick / 看守脚本）各自调它。
+ */
+export const CLOCK_GRACE_MIN = 20
+
+/** 唤醒日志里那次闹钟的**实际**发生时间（毫秒）；没有就是 null */
+export function firedAtOf(logLines, entryId, whenStr) {
+  const want = 'clock:' + entryId + '@' + whenStr
+  let best = null
+  for (const l of Array.isArray(logLines) ? logLines : []) {
+    if (!l || l.trigger !== want) continue
+    const t = Date.parse(String(l.at || ''))
+    if (Number.isFinite(t) && (best === null || t < best)) best = t
+  }
+  return best
+}
+
+/** state.lastFired 里那次闹钟的时间（毫秒）；日期不是今天就当没有 —— 第二个证据源。
+ *  2026-10-26 加：日志会因为插件热重载丢行，账本不会。 */
+export function firedAtOfState(lastFired, entryId, now = new Date()) {
+  const v = lastFired && typeof lastFired === 'object' ? lastFired[entryId] : null
+  if (!v) return null
+  const t = Date.parse(String(v))
+  if (!Number.isFinite(t)) return null
+  return dayKey(new Date(t)) === dayKey(now) ? t : null
+}
+
+/**
+ * 今天该响而没响 / 响晚了的闹钟。
+ * @returns {{key:string,id:string,when:string,day:string,kind:'missing'|'late',lateMin:number}[]}
+ * key 是 date:id —— 调用方拿它去重（同一条一天只报一次）。
+ */
+export function clockAnomalies(entries, now = new Date(), logLines = [], opts = {}) {
+  const grace = Number.isFinite(opts.graceMin) ? opts.graceMin : CLOCK_GRACE_MIN
+  const today = dayKey(now)
+  const out = []
+  for (const e of Array.isArray(entries) ? entries : []) {
+    if (String(e.kind || 'clock') !== 'clock' || e.enabled === false) continue
+    const m = parseHhmm(e.when)
+    if (m === null) continue
+    const when = hhmmOf(m)
+    const scheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(m / 60), m % 60).getTime()
+    if (now.getTime() < scheduled + grace * 60000) continue        // 还没过宽限期，不算
+    // ⭐ 2026-10-26 14:2x 修：两个证据源，任一有今天的记录就算响过。
+    //    起因：13:20 报了假 —— noon 其实起来了（state.lastFired 记着 13:00），
+    //    但那一轮正在热重载这个插件，日志那行没落下来，"只看日志"就判成没响。
+    //    日志会因重载丢行，账本会因 spawn 失败丢 ⇒ 谁有记录听谁的。
+    const tLog = firedAtOf(logLines, e.id, when)
+    const tState = firedAtOfState(opts.lastFired, e.id, now)
+    const firedAt = tLog === null ? tState : (tState === null ? tLog : Math.min(tLog, tState))
+    const key = today + ':' + e.id
+    if (firedAt === null) {
+      out.push({ key, id: e.id, when, day: today, kind: 'missing', lateMin: Math.round((now.getTime() - scheduled) / 60000) })
+    } else if (firedAt > scheduled + grace * 60000) {
+      out.push({ key, id: e.id, when, day: today, kind: 'late', lateMin: Math.round((firedAt - scheduled) / 60000) })
+    }
+  }
+  return out
+}
+
+/** 一条异常 → open_loops.md 里的一行（措辞里必须有日期和分钟数，不然醒来也不知道是啥） */
+export function clockAnomalyLine(a, at = new Date()) {
+  const hm = pad2(at.getHours()) + ':' + pad2(at.getMinutes())
+  if (a.kind === 'late') return '- [ ] 闹钟迟到：' + a.id + '@' + a.when + ' 晚了 ' + a.lateMin + ' 分钟才醒 — 自动写入 ' + a.day + ' ' + hm
+  return '- [ ] 闹钟没响：' + a.id + '@' + a.when + ' 到点 ' + a.lateMin + ' 分钟了还没有唤醒记录（可能是 dsh web 没跑 / tick 没到点）— 自动写入 ' + a.day + ' ' + hm
+}
+
+/** 去重表：只留最近的 n 个 key，别让 state.json 无限长 */
+export function rememberKeys(prev, keys, n = 40) {
+  const list = Array.isArray(prev) ? prev.map(String) : []
+  for (const k of Array.isArray(keys) ? keys : []) if (!list.includes(String(k))) list.push(String(k))
+  return list.slice(-n)
 }
 
 /* ───────────────────────── 降频（"困的代理"，不叫累） ─────────────────────────

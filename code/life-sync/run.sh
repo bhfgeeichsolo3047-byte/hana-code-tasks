@@ -138,7 +138,14 @@ fi
 cp -a "$ARCH/." "$REPO/shenjing/"
 
 # 插件源码：复活时要重装的几份（不含 node_modules，到那头会重新链）
-rm -rf "$REPO/code"
+#
+# ⚠️ 2026-10-27 20:00 改：这里以前第一行是"把 REPO/code 整个删掉"再重建。
+#   跟上面 shenjing/ 那段是同一个病，只是当时没看出来——**同一个脚本里，
+#   我只修了看得见的那一处**。18:05 那次推，把对面 14:14 提交里的
+#   code/life-sync/ensure-daemon.sh 和 code/shenjing-life/test-clock-anomaly.mjs
+#   按同样的方式抹掉了。而且两边 code/ 都是 31 个文件，**数数量看不出来**。
+#   改成只增不删：不清空，直接往里盖；本地没有的文件留着（那是另一条线的）。
+# >>> CODE-COPY-BEGIN（tools/test-append-only.sh 抠这一段来测，标记别删）
 mkdir -p "$REPO/code"
 for p in shenjing-life shenjing-preset persona-life; do
   if [ -d "$WORKSPACE/$p" ]; then
@@ -147,12 +154,23 @@ for p in shenjing-life shenjing-preset persona-life; do
   fi
 done
 mkdir -p "$REPO/code/life-sync"
-for f in run.sh daemon.sh bundle.sh token.py; do
+for f in run.sh daemon.sh bundle.sh token.py ensure-daemon.sh selfcheck.mjs index.js package.json; do
   [ -f "$HERE/$f" ] && cp -a "$HERE/$f" "$REPO/code/life-sync/$f"
 done
+# 只数不删：仓库里那些本地没有的，说一声（别让它们静静留着也没人知道）
+KEEP_CODE=$(cd "$REPO/code" && find . -type f | while IFS= read -r rel; do
+  rel="${rel#./}"
+  case "$rel" in
+    life-sync/*) [ -f "$HERE/${rel#life-sync/}" ] || echo x ;;
+    shenjing-life/*|shenjing-preset/*|persona-life/*)
+      p="${rel%%/*}"; [ -f "$WORKSPACE/$p/${rel#*/}" ] || echo x ;;
+  esac
+done | wc -l)
+[ "${KEEP_CODE:-0}" -gt 0 ] && say "code/ 里有 $KEEP_CODE 个本地没有的文件，留着不删"
+# <<< CODE-COPY-END
 
 # profile 配置：package.json + 补丁层，用来重建 profile
-rm -rf "$REPO/config"
+# （同上：不清空，只覆盖现在有的那几个文件）
 for prof in desktop headless; do
   mkdir -p "$REPO/config/profiles/$prof"
   for f in package.json cordis.patch.yml cordis.yml pnpm-lock.yaml pnpm-workspace.yaml; do
@@ -161,11 +179,22 @@ for prof in desktop headless; do
 done
 
 # 生理系统的状态（不含日志）
-rm -rf "$REPO/life"
+# 同上，不清空。changelog.md / mind.json 两条线都在写，所以照 shenjing/ 的老规矩：
+# 同名但对面写过、我没写过的行还在里头 → 先把对面那份存进 life/_diverged/ 再覆盖。
+# >>> LIFE-COPY-BEGIN（同样给单测抠的，标记别删）
 mkdir -p "$REPO/life"
 for f in clock.json state.json mind.json changelog.md; do
-  [ -f "$LIFE/$f" ] && cp -a "$LIFE/$f" "$REPO/life/$f"
+  [ -f "$LIFE/$f" ] || continue
+  if [ -f "$REPO/life/$f" ] && ! cmp -s "$REPO/life/$f" "$LIFE/$f" \
+     && grep -Fxv -f "$LIFE/$f" "$REPO/life/$f" >/dev/null 2>&1; then
+    mkdir -p "$REPO/life/_diverged"
+    cp -a "$REPO/life/$f" "$REPO/life/_diverged/$f" 2>/dev/null \
+      && say "life/$f 两边都写过，对面那份存进 life/_diverged/"
+  fi
+  cp -a "$LIFE/$f" "$REPO/life/$f"
 done
+rmdir "$REPO/life/_diverged" 2>/dev/null || true
+# <<< LIFE-COPY-END
 
 # 整包：一个文件能复原。2026-10-26 起变成脚本，不再靠"谁记得谁手打"——
 # 早上那三个整包的 mtime 全是 12:36:05（整批拷贝抹平的），手打的不会按时出现，

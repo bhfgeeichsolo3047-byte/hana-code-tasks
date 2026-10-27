@@ -353,7 +353,26 @@ const s1 = await call('life_status', {})
 ok(s1.ok === true && Array.isArray(s1.clock) && s1.clock.length >= 5, 'life_status：返回 ' + (s1.clock || []).length + ' 条 clock + mind + 计数')
 ok(typeof s1.today.wakes === 'number' && typeof s1.today.proactive === 'number', 'life_status：今天的唤醒数 / 主动消息数都在')
 ok(typeof s1.inSilence === 'boolean' && s1.log.endsWith('.jsonl'), 'life_status：静默判定 + 日志路径')
-ok(s1.loops.open === 1 && s1.loops.oldestDays !== null, 'life_status：未完成 1 条、最旧一条 ' + s1.loops.oldestDays + ' 天')
+// 2026-10-27 21:10 改：这里原来断言 open === 1。
+// 现在不行了，因为 tick 里接了闹钟异常检查（reportClockAnomalies）——
+// 自检把时钟摆到 13:30 / 23:58，morning@08:00 和 noon@13:00 都"过点没醒"，
+// 于是它按设计往 open_loops 里写了两条。**这条断言失败是功能在工作的证据。**
+// 所以判据改成：open 至少 1 条、最旧那条算得出天数，且写入的那些行确实来自闹钟检查。
+ok(s1.loops.open >= 1 && s1.loops.oldestDays !== null,
+  'life_status：未完成 ' + s1.loops.open + ' 条、最旧一条 ' + s1.loops.oldestDays + ' 天')
+ok(Array.isArray(s1.anomalies), 'life_status：带 anomalies 字段（' + (s1.anomalies || []).length + ' 条）')
+// 闹钟异常那条路得两边都验：
+//   ① 真没响的时候会写进 open_loops（上面 open >= 1 就是这个的证据，自检把钟摆到 13:30）；
+//   ② 响过之后不许再写 —— 否则每 60 秒一条，open_loops 会被灌满。
+{
+  const before = (readFileSync(files.loopsFile, 'utf8').match(/闹钟(没响|迟到)/g) || []).length
+  life.tick(at(13, 31))
+  life.tick(at(13, 32))
+  const after = (readFileSync(files.loopsFile, 'utf8').match(/闹钟(没响|迟到)/g) || []).length
+  ok(after === before, '闹钟异常只写一次（再跳两下：' + before + ' → ' + after + '）')
+  const keys = (JSON.parse(readFileSync(files.stateFile, 'utf8')).reportedClock || [])
+  ok(Array.isArray(keys) && keys.length >= 1, '去重表 reportedClock 记下来了（' + keys.length + ' 条）')
+}
 ok(s1.clock.some((e) => e.firedToday === true), 'life_status：能看出哪条今天已经跑过')
 
 /* ── 13. life_tell：闸门在代码里，不在提示词里 ──────────────────────────── */

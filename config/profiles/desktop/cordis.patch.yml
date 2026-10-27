@@ -99,8 +99,8 @@
   config:
     visible: true
     size: 160
-    right: 9
-    bottom: 476
+    right: 0
+    bottom: 782
     petId: whale-girl
 - id: codex-subscription
   name: dsh-codex-subscription

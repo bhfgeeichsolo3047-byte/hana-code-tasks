@@ -28,6 +28,7 @@
 import argparse
 import glob
 import os
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -81,6 +82,59 @@ def all_bundles():
     for d in BUNDLE_DIRS:
         seen.extend(glob.glob(os.path.join(d, "*.tar.gz")))
     return sorted(set(seen))
+
+
+# ── 第三把尺子：备份仓库分支的 HEAD ────────────────────────────────────────
+# 2026-10-27 就是被"整包太旧"漏过去的：三份整包最新的那份是 01:49 打的，
+# 而丢的东西是 01:49 之后写的 —— 尺子比东西旧，量不出来。那天 17:47 推了一次，
+# run.sh 里的 `rm -rf repo/shenjing` 把另一条线 14:14 推上去的 13 个文件从分支上抹掉了，
+# 体检照样 exit 0。
+#
+# 分支 HEAD 比整包新得多（每次都推，整包 20 小时才打一次），所以它是第四把、也是最新那把尺子。
+# 关键：**读它不需要联网**。`git ls-tree` 读的是本地 .git 里已经 fetch 下来的 ref，
+# 断网的时候照样能读（这台的网络经常断，今天三条代理全 000）。
+#
+# 但有一处它看不见，得说清楚：HEAD 是"最近一次 fetch 时的远端"，
+# 如果对面推了新东西而我没 fetch，HEAD 就旧了。所以它不能替掉整包，只能叠上去。
+LIFE_SYNC_REPO = os.path.join(
+    os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh-beta")), "life-sync", "repo")
+REMOTE_REF = os.environ.get("SHENJING_REMOTE_REF", "origin/life-sync")
+
+
+def read_remote_tree(repo=None, ref=None):
+    """返回 ({相对路径: 字节数}, 出错原因)。只读本地 .git，不联网。"""
+    repo = repo or LIFE_SYNC_REPO
+    ref = ref or REMOTE_REF
+    if not os.path.isdir(os.path.join(repo, ".git")):
+        return {}, "没有备份仓库（%s 不是 git 仓库）" % repo
+    try:
+        out = subprocess.run(
+            ["git", "-C", repo, "-c", "core.quotePath=false",
+             "ls-tree", "-r", "-l", ref],
+            capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        return {}, "git 跑不起来（%s）" % e.__class__.__name__
+    if out.returncode != 0:
+        msg = out.stderr.decode("utf-8", "replace").strip().splitlines()
+        return {}, "读不到 %s（%s）" % (ref, msg[0] if msg else "未知")
+    tree = {}
+    for line in out.stdout.decode("utf-8", "replace").splitlines():
+        # 格式：<mode> <type> <sha> <size>\t<path>；ls-tree -l 里 size 是 blob 字节数
+        head, _, path = line.partition("\t")
+        parts = head.split()
+        if len(parts) < 4 or not path:
+            continue
+        if not (path == "shenjing" or path.startswith("shenjing/")):
+            continue
+        rel = path[len("shenjing/"):] if path.startswith("shenjing/") else ""
+        if not rel:
+            continue
+        try:
+            size = int(parts[3])
+        except ValueError:
+            size = -1
+        tree[rel] = size
+    return tree, None
 
 
 def norm(data):
@@ -148,6 +202,8 @@ def main():
     ap.add_argument("--strict", action="store_true", help="内容不同也算失败（默认不算）")
     ap.add_argument("--skip-mechanisms", action="store_true",
                     help="只查档案文件，不查 life-sync 里那几样机制的记号")
+    ap.add_argument("--skip-remote", action="store_true",
+                    help="不拿备份仓库分支的 HEAD 当对照（断网/换机器时用）")
     a = ap.parse_args()
 
     bundles = all_bundles()
@@ -167,7 +223,13 @@ def main():
                 ever[k] = (os.path.basename(b), len(v), v)
     cur = read_current(ARCHIVE)
 
+    remote, remote_err = ({}, "跳过")
+    if not a.skip_remote:
+        remote, remote_err = read_remote_tree()
+
     lost = sorted(k for k in ever if k not in cur and not k.startswith(IGNORE_PREFIX))
+    # 远端 HEAD 那把尺子：分支上还在、桌上没了 → 也算丢（哪怕整包太旧量不出来）
+    lost_remote = sorted(k for k in remote if k not in cur and not k.startswith(IGNORE_PREFIX))
     real = []
     if a.strict:
         for k in sorted(set(ever) & set(cur)):
@@ -233,11 +295,40 @@ def main():
                 with open(os.path.join(fake_dir, "run.sh"), "w", encoding="utf-8") as f:
                     f.write(real)
             ok2 = ok2 and ok3
-        return 0 if (ok and ok2) else 9
+
+        # 反例四：远端 HEAD 那把尺子也得能真报。
+        # 做法：从真的远端树里挑一个桌上真的有的文件，"假装桌上没它"，看会不会被报成丢。
+        # 这条正是 2026-10-27 漏掉的那种：整包太旧看不见，远端一直在。
+        ok4 = None
+        if a.skip_remote:
+            print("反例四：这次 --skip-remote，跳过了")
+        elif remote_err:
+            print("反例四：读不到远端树（%s），这条检查这次等于没有 —— 别忘了" % remote_err)
+        else:
+            cand = sorted(k for k in remote if k in cur and not k.startswith(IGNORE_PREFIX))
+            if not cand:
+                print("反例四：远端树里没有桌上也有的文件，造不出反例")
+            else:
+                victim4 = cand[-1]
+                fake_cur4 = {k: v for k, v in cur.items() if k != victim4}
+                fake_lost4 = sorted(k for k in remote
+                                    if k not in fake_cur4 and not k.startswith(IGNORE_PREFIX))
+                ok4 = victim4 in fake_lost4
+                print("反例四：假装现在少了 %s（远端 HEAD 里有）→ %s"
+                      % (victim4, "报出来了" if ok4 else "没报，这条检查是假的"))
+                if ok4:
+                    print("  （2026-10-27 真发生过的就是这件事：整包 01:49，丢的东西 01:49 之后写的）")
+        return 0 if (ok and ok2 and ok4 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
     print("档案现在 %d 个文件" % len(cur))
+    if a.skip_remote:
+        print("备份分支的 HEAD：这次跳过了（--skip-remote）")
+    elif remote_err:
+        print("备份分支的 HEAD：读不到（%s）—— 这把尺子这次没量" % remote_err)
+    else:
+        print("备份分支的 HEAD：%s 里有 %d 个文件（离线读的，不联网）" % (REMOTE_REF, len(remote)))
 
     mech = []
     if not a.skip_mechanisms:
@@ -251,6 +342,12 @@ def main():
         for k in lost:
             print("  %s  （最早见于 %s，%d 字节）" % (k, ever[k][0], ever[k][1]))
         print("  → 从那份包里捞回来，别重写。")
+    if lost_remote:
+        code = code or 5
+        print("\n[丢了·远端] %s 上还在、现在桌上没有（%d）：" % (REMOTE_REF, len(lost_remote)))
+        for k in lost_remote:
+            print("  %s  （%d 字节）" % (k, remote[k]))
+        print("  → 这条就是整包太旧时看不见的那种丢法。从分支上捞，别重写。")
     if real:
         code = code or 3
         print("\n[内容不同] 逐字节比（%d）：" % len(real))
@@ -266,6 +363,8 @@ def main():
         print("     不许让它继续这么放着：文档说在、其实不在，比缺东西更难发现。")
     if code == 0:
         print("\n档案不缺：历史整包里出现过的文件，现在都还在。")
+        if not remote_err and not a.skip_remote:
+            print("远端也不缺：%s 上的文件，桌上一个不少。" % REMOTE_REF)
         if not a.skip_mechanisms:
             print("机制都在：文档里承诺的那几样，代码里找得到记号。")
     return code

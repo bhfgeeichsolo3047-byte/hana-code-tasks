@@ -1,9 +1,24 @@
 #!/bin/bash
 # 单测 run.sh 里的 mark_ok / mark_fail 两个函数，不连网、不碰真档案。
 # 2026-10-26 16:00 写：搬机器把这两个函数弄丢过一次，以后每次改 run.sh 都跑一遍。
+#
+# 2026-10-27 20:10 修：默认路径原来是 `$HOME/../life-sync/run.sh`，拼错了
+# （$HOME=/c/Users/Administrator → 找 /c/Users/life-sync）。它每次都 exit 9 说
+# "抠不出 say，测试本身是坏的"——**这是它做对了**：它没有假装通过。
+# 但这种测试放着不跑，等于没有。现在按 DSH_HOME 探，探不到就明说。
 set -uo pipefail
 
-SRC="${1:-$HOME/../life-sync/run.sh}"
+default_src() {
+  for c in "${DSH_HOME:-}" "$HOME/.dsh-beta" "$HOME/.dsh"; do
+    [ -n "$c" ] && [ -f "$c/life-sync/run.sh" ] && { echo "$c/life-sync/run.sh"; return; }
+  done
+  echo ""
+}
+SRC="${1:-$(default_src)}"
+if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
+  echo "找不到 run.sh（试过 \$DSH_HOME / ~/.dsh-beta / ~/.dsh）；拿第一个参数指名：$0 <run.sh 路径>" >&2
+  exit 9
+fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 HERE="$TMP"
