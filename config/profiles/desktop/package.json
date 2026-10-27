@@ -2,7 +2,6 @@
   "name": "dsh-profile-desktop",
   "private": true,
   "dependencies": {
-    "@linxin666/dsh-web-all": "^0.4.8",
     "@liustack/modlens": "3.27.2",
     "@liustack/modsearch": "5.10.10",
     "@local/dsh-shenjing-preset": "link:F:/小鲸/shenjing-preset",
@@ -45,7 +44,6 @@
         "@vectorize-io/hindsight-coding-agents",
         "dsh-any-background",
         "dsh-plugin-wallpaper-engine",
-        "@linxin666/dsh-web-all",
         "dsh-codex-subscription",
         "dsh-our-free-model",
         "dsh-bili-scroll",
@@ -60,6 +58,15 @@
         "dsh-shenjing-life",
         "@local/dsh-shenjing-preset"
       ]
+    }
+  },
+  "pnpm": {
+    "overrides": {
+      "@deepseek-ai/dsh-brand": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-home-paths": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-session-persistence": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-session-projection": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-util-values": "0.2.1-rc.2"
     }
   }
 }

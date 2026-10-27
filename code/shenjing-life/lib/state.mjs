@@ -169,13 +169,27 @@ export function firedAtOfState(lastFired, entryId, now = new Date()) {
 
 /**
  * 今天该响而没响 / 响晚了的闹钟。
- * @returns {{key:string,id:string,when:string,day:string,kind:'missing'|'late',lateMin:number}[]}
+ * @returns {{key:string,id:string,when:string,day:string,kind:'missing'|'late',lateMin:number,cause?:'downtime'}[]}
  * key 是 date:id —— 调用方拿它去重（同一条一天只报一次）。
+ *
+ * ⭐ 2026-10-27 23:0x 加 cause：**分不清"机器关着"和"我该醒却没醒"，这个检查就会自己变成噪音。**
+ *   当天早上 machine 14:14 才开机、插件 22:57 才挂上，于是 morning@08:00 和 noon@13:00
+ *   都被报成"迟到了 607 / 416 分钟"—— 那不是闹钟坏了，是那会儿这台机器根本没开着。
+ *   每天开机都往 open_loops 里写三行这种"错怪"，一周之后真出问题的那条就淹在里面了。
+ *   ⚠️ 注意这不是"让检查闭嘴"：被解释掉的那几条**照样算出来、照样进 life_status**，
+ *   只是不再当成待办写进 open_loops —— 因为那上面没有一件事是我能做的。
+ *   判据用的是 os.uptime() 推出来的开机时刻（真事实，不是猜）：
+ *   到点那一刻机器还没开着 ⇒ cause='downtime'。
+ *   局限写在明处：Windows 上 os.uptime() 对"睡眠"算不算过去，文档没保证。
+ *   所以这条只用来**降级**（少写一行假待办），绝不用来提高"一切正常"的数字。
  */
 export function clockAnomalies(entries, now = new Date(), logLines = [], opts = {}) {
   const grace = Number.isFinite(opts.graceMin) ? opts.graceMin : CLOCK_GRACE_MIN
+  const machineOnSince = Number.isFinite(opts.machineOnSince) ? Number(opts.machineOnSince) : null
   const today = dayKey(now)
   const out = []
+  /** 到点那一刻机器开着吗？机器没开 ⇒ 这条不是我的错，也不是闹钟的错 */
+  const wasAsleepThen = (scheduled) => machineOnSince !== null && scheduled + grace * 60000 < machineOnSince
   for (const e of Array.isArray(entries) ? entries : []) {
     if (String(e.kind || 'clock') !== 'clock' || e.enabled === false) continue
     const m = parseHhmm(e.when)
