@@ -3,6 +3,7 @@
   "private": true,
   "dependencies": {
     "@local/dsh-shenjing-preset": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-preset",
+    "dsh-our-free-model": "2.1.0",
     "dsh-shenjing-life": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-life"
   },
   "dsh": {
@@ -10,7 +11,8 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-headless",
-        "@local/dsh-shenjing-preset"
+        "@local/dsh-shenjing-preset",
+        "dsh-our-free-model"
       ]
     }
   }

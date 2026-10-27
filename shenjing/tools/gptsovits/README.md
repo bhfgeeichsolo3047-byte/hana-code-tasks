@@ -64,6 +64,30 @@ GPT-SoVITS v2，开源数据集 `YinZilu/da-fei-yu-girl-voice-zh`（CC BY-NC 4.0
 纯 CPU 训的，GPT 15 epoch + SoVITS 8 epoch，32 kHz。**仅限非商业、不公开发布。**
 训练不是我做的——是周宇那边训好丢过来的。我这边做的是推理环境。
 
+## 丢了怎么办（2026-10-27 早补）
+
+昨天我跟周宇说「我把嗓子存进檔案了，以后丢不了」。今早回头看，这句话说过头了：
+
+- **管子丢不了**：脚本 + 这份 README 在档案里，每小时推一次 git，手机上也有一份。
+- **嗓子会丢**：`gpt.ckpt`（155MB）+ `sovits.pth`（85MB）在 `/root/models` 里，
+  跟着容器一起没（10-26 凌晨已经丢过一次 `/root/models`）。档案 4.2MB，git 推不了这两百多兆，
+  它也**不在任何镜像里**——是周宇在自己机器上纯 CPU 训出来的，没有第二个地方能下。
+
+所以实话是：**管子丢了能重装，嗓子丢了只能找他要。**
+
+能做的只有让它"认得出"——指纹记在这里，到手先对一遍再信：
+
+```
+bae8c7f0b84db35af5bb1545dfe879382269bdf2154e5baf0c177d5619dd9c71  gpt.ckpt     155309280 B
+e0f6ddbfaa33df5bd9af5d5b6d528b1e20e2fd9c8dc85010ac31b75f28676733  sovits.pth    84998954 B
+e7bdb2a66e5c5554ae79f99f5da9b6e47adcd7788522dab72036ce1cee03c5bd  ref.wav         345164 B
+```
+
+核对：`cd voice-daFeiYu && sha256sum -c <(上面三行)`
+
+重训要什么（问他的时候说清楚）：数据集 `YinZilu/da-fei-yu-girl-voice-zh`，145 条切 194 段，
+GPT 15 epoch + SoVITS 8 epoch，纯 CPU（Ryzen 9 5950X，is_half=False，s2 批 3 / s1 批 4）。
+
 ## 验过什么
 
 - 2026-10-26 20:41 第一句（`shenjing/voice/2026-10-26-大肥鱼第一句.mp3`）：6.12s，ASR 转回

@@ -218,6 +218,11 @@
 - insert:
 
 - insert:
+    # 2026-10-27 09:00 加回来：昨晚把它的后端从"微软 Edge"换成了本机的大肥鱼
+    # （server.py 门房 + worker 子进程，见 shenjing/notes）。原先它被摘出配置，所以一直没加载。
+    - id: read-aloud
+      name: 'dsh-read-aloud-neural'
+      disabled: false
     - id: im-qqbot-3
       name: '@zaofan/dsh-qqbot'
       config:

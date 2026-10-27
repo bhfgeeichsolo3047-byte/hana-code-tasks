@@ -47,9 +47,6 @@ importers:
       dsh-computer-use-android:
         specifier: link:/root/dsha-computer-use-android
         version: link:../../../dsha-computer-use-android
-      dsh-connect-workbuddy:
-        specifier: ^5.11.0
-        version: 5.11.0(@deepseek-ai/dsh-home-paths@0.2.0-rc.2)
       dsh-deepread:
         specifier: ^1.0.1
         version: 1.0.1(@deepseek-ai/schemastery@3.18.5)(zod@4.6.7)
@@ -567,25 +564,6 @@ packages:
         optional: true
       react-dom:
         optional: true
-
-  dsh-connect-workbuddy@5.11.0:
-    resolution: {integrity: sha512-1uUiZMacdlbBorZwh6IOlJwBrUOxbFlD0T6bCWh795aVLN842M77D6SFikC6zuVOPewWeIoNCOSQdJwuhQlz3Q==}
-    engines: {node: ^22.19.0 || >=24.0.0}
-    hasBin: true
-    peerDependencies:
-      '@deepseek-ai/cordis': '>=4.0.1-rc.1 <5.0.0 || >=4.0.2 <5.0.0'
-      '@deepseek-ai/dsh-atomic-write': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-attachment': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-client-ui-primitives': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-client-ui-renderer': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-client-ui-settings': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-home-paths': 0.2.0-rc.2
-      '@deepseek-ai/dsh-host-webserver': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-llm': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-llm-pi-ai': '>=0.1.7-rc.1 <0.3.0-0'
-      '@deepseek-ai/dsh-settings': '>=0.1.7-rc.1 <0.3.0-0'
-      '@earendil-works/pi-ai': '>=0.85.0 <0.88.0 || >=1.0.0-0 <2.0.0'
-      react: ^18.2.0
 
   dsh-deepread@1.0.1:
     resolution: {integrity: sha512-DOF1Pt5etZaSGnOp5cSJTa6tXHIP/UHiJ1Q0PGW/CZ6wr29XH0jfdzwgFMVcgfAWJwvVRF+C1JB/XDZV4VDeAQ==}
@@ -1440,11 +1418,6 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
-
-  dsh-connect-workbuddy@5.11.0(@deepseek-ai/dsh-home-paths@0.2.0-rc.2):
-    dependencies:
-      '@deepseek-ai/dsh-home-paths': 0.2.0-rc.2
-      '@deepseek-ai/schemastery': 3.18.4
 
   dsh-deepread@1.0.1(@deepseek-ai/schemastery@3.18.5)(zod@4.6.7):
     dependencies:

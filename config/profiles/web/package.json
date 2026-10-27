@@ -13,7 +13,6 @@
     "dsh-bili-scroll": "^2.0.2",
     "dsh-codex-subscription": "^3.1.4",
     "dsh-computer-use-android": "link:/root/dsha-computer-use-android",
-    "dsh-connect-workbuddy": "^5.11.0",
     "dsh-deepread": "^1.0.1",
     "dsh-device-shell-guide": "link:/root/dsha-device-shell-guide",
     "dsh-emoji": "^0.3.6",
@@ -61,8 +60,7 @@
         "dsh-mnemon",
         "dsh-meme",
         "dsh-deepread",
-        "@zaofan/dsh-qqbot",
-        "dsh-connect-workbuddy"
+        "@zaofan/dsh-qqbot"
       ],
       "patchReload": "startup"
     }

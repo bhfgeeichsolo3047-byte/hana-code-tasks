@@ -40,6 +40,18 @@ mark_fail() {
   fi
 }
 
+# 2026-10-27 08:05 加：同一时刻只许一个 run.sh。
+# 昨晚 01:48 两个实例撞在一起：各打了一个整包（014823 / 014906），
+# 又各自把"最新的那个"往手机上丢了一次——手机侧就自动多出一个 (1)，
+# 而 014823 那个包从头到尾没离开过这台机器。日志里也读不出是谁干的。
+# 备份这条线上宁可这一次没推，也不能两次都推。
+exec 9>"$HERE/run.lock"
+if ! flock -n 9; then
+  say "另一次 run.sh 还在跑（$(cat "$HERE/run.lock" 2>/dev/null || echo 未知 pid)），这次跳过"
+  exit 0
+fi
+echo $$ > "$HERE/run.lock"
+
 if [ "$BUNDLE_ONLY" = "1" ]; then
   TS=$(date '+%Y%m%d-%H%M%S')
   OUT="$HERE/hana-$TS.tar.gz"

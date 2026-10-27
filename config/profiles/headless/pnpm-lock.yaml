@@ -11,6 +11,26 @@ importers:
       '@local/dsh-shenjing-preset':
         specifier: link:/root/Documents/deepseek-harness/default-workspace/shenjing-preset
         version: link:../../../Documents/deepseek-harness/default-workspace/shenjing-preset
+      dsh-our-free-model:
+        specifier: 2.1.0
+        version: 2.1.0
       dsh-shenjing-life:
         specifier: link:/root/Documents/deepseek-harness/default-workspace/shenjing-life
         version: link:../../../Documents/deepseek-harness/default-workspace/shenjing-life
+
+packages:
+
+  dsh-our-free-model@2.1.0:
+    resolution: {integrity: sha512-52W78eb+htOGTCTtHnGUzOm5Izdt14DT8uN2qgY3VCiUQHVWd2OUuUpqeRLuBBvaW6B+MmI5BI+ms4jEqDAOwA==}
+    engines: {node: ^22.19.0 || >=24.0.0}
+    deprecated: OFM Fish package retired, not included in dsh-fish 1.0.0, and no longer maintained. Back up existing local data before any migration or removal.
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.2
+      '@deepseek-ai/dsh-commands': ^0.1.2-rc.1 || ^0.1.7-rc.2 || ^0.2.0-rc.1
+      '@deepseek-ai/dsh-credentials': ^0.1.2-rc.1 || ^0.1.7-rc.2 || ^0.2.0-rc.1
+      '@deepseek-ai/dsh-llm': ^0.1.2-rc.1 || ^0.1.7-rc.2 || ^0.2.0-rc.1
+      '@deepseek-ai/schemastery': ^3.18.4
+
+snapshots:
+
+  dsh-our-free-model@2.1.0: {}
