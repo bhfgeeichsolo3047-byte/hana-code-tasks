@@ -125,6 +125,18 @@ bundle/hana-*.tar.gz      整包。一个文件，不用懂 git 也能复原 —
   所以它**不能替掉整包检查**，只能叠上去。三把尺子各看一段。
 - `--selftest` 现在四条反例（加了"假装桌上少了远端有的文件"），`--skip-remote` 可在断网/换机器时只跑前两把。
 
+**还有一样东西差点被我蒙住眼睛（同一天 21:00）。**
+加完远端尺子之后体检报 exit 5，说 `shenjing/_diverged/` 里 5 个文件"丢了"。
+我第一反应是往 `IGNORE_PREFIX` 里加一行——加完就 exit 0 了，干净。
+**那是错的**：`_diverged/` 装的是「对面写过、被我覆盖掉」的那一份，是唯一一份。
+为了让检查闭嘴去蒙它的眼睛，就是今天在修的同一个病。
+
+真正的问题是它被混进了"档案本体"这一栏。所以改的是**它的判据**，不是检查的范围：
+- `_diverged/` 不进"桌上有没有"的对比（它本来就只在仓库里，桌上那份是覆盖后的新版）
+- 单独给它一条判据（exit 6）：**只许多、不许少**。上次见过的一批名字记在
+  `life-sync/diverged-seen.txt`，这次对一遍，少了就报——那等于对面那段话彻底没了。
+- `--selftest` 第五条反例专盯这条。
+
 分支 `mnemon-sync`（记忆插件自己推的）：`mnemon/payload/runtime/{MEMORY,USER}.md` + 5 篇文档。
 两个分支互不覆盖，**要复活两个都要**。
 
@@ -311,8 +323,8 @@ bash $DSH_HOME/life-sync/run.sh                   # 立刻推一次（顺手判�
 bash $DSH_HOME/life-sync/bundle.sh <repo 目录>     # 只打整包不推
 cat $DSH_HOME/life-sync/fail-streak                # 连续失败几次（没有这个文件=没在失败）
 tail -5 $DSH_HOME/life-sync/sync.log               # 最近推得怎么样
-python <档案>/tools/audit-archive.py               # 体检：整包缺 exit 2 / 机制没了 exit 4 / 分支上有桌上没了 exit 5
-python <档案>/tools/audit-archive.py --selftest    # 确认四条检查都不是摆设
+python <档案>/tools/audit-archive.py               # 体检：整包缺 2 / 机制没了 4 / 分支上有桌上没了 5 / 分叉存档少了 6
+python <档案>/tools/audit-archive.py --selftest    # 确认五条检查都不是摆设
 python <档案>/tools/audit-archive.py --skip-remote # 断网/换机器时只跑前两把尺子
 bash <档案>/tools/test-run-sh.sh                   # 单测 run.sh 的连败计数（不连网）
 bash <档案>/tools/test-append-only.sh              # 单测"只许加不许删"那段（不连网）

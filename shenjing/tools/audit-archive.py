@@ -40,6 +40,10 @@ BUNDLE_DIRS = [
     os.environ.get("SHENJING_BUNDLE_DIR", r"F:\小鲸\bundle"),
     os.path.join(os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh-beta")), "life-sync", "repo", "bundle"),
 ]
+# ⚠️ `_diverged/` 不许加进这里。2026-10-27 21:00 我差点加了——因为加了之后
+#   体检就从 exit 5 变成 exit 0，"干净"了。可 `_diverged/` 里装的是
+#   **对面写过、被我覆盖掉的那一份**：它就是"别让对面的话消失"的最后一道防线。
+#   它丢了才是真丢（而且是唯一那一份）。为了让检查闭嘴去蒙它的眼睛，是同一个病。
 IGNORE_PREFIX = ("tools/",)  # 工具自己可能还没进旧包
 
 
@@ -102,22 +106,23 @@ REMOTE_REF = os.environ.get("SHENJING_REMOTE_REF", "origin/life-sync")
 
 
 def read_remote_tree(repo=None, ref=None):
-    """返回 ({相对路径: 字节数}, 出错原因)。只读本地 .git，不联网。"""
+    """返回 ({相对路径: 字节数}, {_diverged 里的路径: 字节数}, 出错原因)。只读本地 .git，不联网。"""
     repo = repo or LIFE_SYNC_REPO
     ref = ref or REMOTE_REF
     if not os.path.isdir(os.path.join(repo, ".git")):
-        return {}, "没有备份仓库（%s 不是 git 仓库）" % repo
+        return {}, {}, "没有备份仓库（%s 不是 git 仓库）" % repo
     try:
         out = subprocess.run(
             ["git", "-C", repo, "-c", "core.quotePath=false",
              "ls-tree", "-r", "-l", ref],
             capture_output=True, timeout=60)
     except (OSError, subprocess.SubprocessError) as e:
-        return {}, "git 跑不起来（%s）" % e.__class__.__name__
+        return {}, {}, "git 跑不起来（%s）" % e.__class__.__name__
     if out.returncode != 0:
         msg = out.stderr.decode("utf-8", "replace").strip().splitlines()
-        return {}, "读不到 %s（%s）" % (ref, msg[0] if msg else "未知")
+        return {}, {}, "读不到 %s（%s）" % (ref, msg[0] if msg else "未知")
     tree = {}
+    diverged = {}
     for line in out.stdout.decode("utf-8", "replace").splitlines():
         # 格式：<mode> <type> <sha> <size>\t<path>；ls-tree -l 里 size 是 blob 字节数
         head, _, path = line.partition("\t")
@@ -133,8 +138,14 @@ def read_remote_tree(repo=None, ref=None):
             size = int(parts[3])
         except ValueError:
             size = -1
+        # `_diverged/` 不是档案本体，是 run.sh 覆盖前存的"对面那份"。
+        # 它只在仓库里有、桌上没有，是**正常的**（桌上那份是覆盖后的新版）。
+        # 但它自己也得有人看着——单独收一份，下面按"只许多不许少"来判。
+        if rel.startswith("_diverged/"):
+            diverged[rel] = size
+            continue
         tree[rel] = size
-    return tree, None
+    return tree, diverged, None
 
 
 def norm(data):
@@ -223,13 +234,31 @@ def main():
                 ever[k] = (os.path.basename(b), len(v), v)
     cur = read_current(ARCHIVE)
 
-    remote, remote_err = ({}, "跳过")
+    remote, remote_div, remote_err = ({}, {}, "跳过")
     if not a.skip_remote:
-        remote, remote_err = read_remote_tree()
+        remote, remote_div, remote_err = read_remote_tree()
 
     lost = sorted(k for k in ever if k not in cur and not k.startswith(IGNORE_PREFIX))
     # 远端 HEAD 那把尺子：分支上还在、桌上没了 → 也算丢（哪怕整包太旧量不出来）
     lost_remote = sorted(k for k in remote if k not in cur and not k.startswith(IGNORE_PREFIX))
+    # `_diverged/` 的判据：只许多，不许少。
+    # 它是"对面写过、被我覆盖掉"的那唯一一份，少了就是那段话彻底没了。
+    # 上一次记账（state/）留着上次看到的那批名字，这次对一遍。
+    div_missing = []
+    if not remote_err and remote_div:
+        seen_file = os.path.join(
+            os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh-beta")),
+            "life-sync", "diverged-seen.txt")
+        try:
+            seen = set(x.strip() for x in open(seen_file, encoding="utf-8").read().splitlines() if x.strip())
+        except OSError:
+            seen = set()
+        div_missing = sorted(k for k in seen if k not in remote_div)
+        try:
+            with open(seen_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(sorted(remote_div)) + "\n")
+        except OSError:
+            pass
     real = []
     if a.strict:
         for k in sorted(set(ever) & set(cur)):
@@ -318,7 +347,24 @@ def main():
                       % (victim4, "报出来了" if ok4 else "没报，这条检查是假的"))
                 if ok4:
                     print("  （2026-10-27 真发生过的就是这件事：整包 01:49，丢的东西 01:49 之后写的）")
-        return 0 if (ok and ok2 and ok4 is not False) else 9
+
+        # 反例五：`_diverged/` 那条"只许多不许少"也得能真报。
+        # 做法不造假数据：拿远端树上真有的一个分叉存档名字，假装"上次见过它、这次没了"。
+        ok5 = None
+        if a.skip_remote:
+            print("反例五：这次 --skip-remote，跳过了")
+        elif remote_err:
+            print("反例五：读不到远端树（%s），跳过" % remote_err)
+        elif not remote_div:
+            print("反例五：现在仓库里还没有分叉存档，跳过（不是失败）")
+        else:
+            victim5 = sorted(remote_div)[-1]
+            fake_seen = set(remote_div) | {victim5 + ".gone"}
+            fake_missing = sorted(k for k in fake_seen if k not in remote_div)
+            ok5 = (victim5 + ".gone") in fake_missing
+            print("反例五：假装分叉存档少了一份 → %s"
+                  % ("报出来了" if ok5 else "没报，这条检查是假的"))
+        return 0 if (ok and ok2 and ok4 is not False and ok5 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
@@ -329,6 +375,8 @@ def main():
         print("备份分支的 HEAD：读不到（%s）—— 这把尺子这次没量" % remote_err)
     else:
         print("备份分支的 HEAD：%s 里有 %d 个文件（离线读的，不联网）" % (REMOTE_REF, len(remote)))
+        if remote_div:
+            print("                 外加 _diverged/ 里 %d 份分叉存档（只许多不许少）" % len(remote_div))
 
     mech = []
     if not a.skip_mechanisms:
@@ -348,6 +396,12 @@ def main():
         for k in lost_remote:
             print("  %s  （%d 字节）" % (k, remote[k]))
         print("  → 这条就是整包太旧时看不见的那种丢法。从分支上捞，别重写。")
+    if div_missing:
+        code = code or 6
+        print("\n[分叉存档少了] 上次还在 shenjing/_diverged/、现在没了（%d）：" % len(div_missing))
+        for k in div_missing:
+            print("  %s" % k)
+        print("  → 那是「对面写过、被我覆盖掉」的那一份。它没了，对面的话就真没了。")
     if real:
         code = code or 3
         print("\n[内容不同] 逐字节比（%d）：" % len(real))
