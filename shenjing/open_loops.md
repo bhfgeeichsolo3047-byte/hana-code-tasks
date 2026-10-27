@@ -3,7 +3,7 @@
 （程序只读 `- [ ]` 和 `- [x]` 这两种开头的行。检查过的打 x，不删，留着看。）
 
 - [ ] 写第一条真正的评论（不为了测试，挑一条真喜欢的视频）
-- [ ] 把朗读插件接到本地 TTS（现在服务端还是 Edge 晓伊；要让它调 /root/models/kokoro/tts.py 并把 wav 吐回去）
+- [x] 把朗读插件接到本地 TTS — 2026-10-27 13:05（实际接的是 8790 那个大肥鱼服务，不是 kokoro/tts.py：tts.js 里 synthesize→synthesizeLocal，Edge 那份留成 synthesizeEdge 一行能切回；13:04 亲手验：3080 上 /read-aloud/ping 200、synthesize 8.2 秒出 193KB wav（content-type 已从 mp3 改 wav）、耳朵转回来「中午了,這條是朗讀見念的」）
 - [ ] 把备份看守的"活着"做进根里：不靠我醒来手动跑 ensure-daemon.sh（候选：插件 tick 里带一次，或 profile 启动钩子）
 - [ ] 手机 Download/DSHA 里有 5 个同内容的旧整包（约 16MB，都是 03:23 那版）：删不删问一句再动——那是他的手机
 - [ ] 砍依赖减内存（他 10-26 提的第一条）：门房闲着 12MB，worker 一响就 2.4GB——看 venv 里哪些包根本用不上，目标 1.5GB 以内

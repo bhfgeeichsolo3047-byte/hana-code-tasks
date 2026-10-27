@@ -1,34 +1,13 @@
 {
-  "name": "dsh-profile-web",
-  "private": true,
   "dependencies": {
-    "@liustack/modlens": "^3.27.1",
-    "@local/dsh-shenjing-preset": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-preset",
-    "@local/persona-life": "link:/root/Documents/deepseek-harness/default-workspace/persona-life",
-    "@memef1f1y/dsh-plugin-tts": "^0.6.7",
-    "@nanmicoder/dsh-agent-teams": "^0.1.26",
-    "@zaofan/dsh-qqbot": "^1.10.46",
-    "dsh-app-integration": "link:/root/dsha-app-integration",
-    "dsh-auto-review": "link:/root/dsha-auto-review",
-    "dsh-bili-scroll": "^2.0.2",
-    "dsh-codex-subscription": "^3.1.4",
-    "dsh-computer-use-android": "link:/root/dsha-computer-use-android",
-    "dsh-deepread": "^1.0.1",
     "dsh-device-shell-guide": "link:/root/dsha-device-shell-guide",
-    "dsh-emoji": "^0.3.6",
-    "dsh-meme": "^0.1.62",
-    "dsh-mnemon": "^0.5.34",
-    "dsh-ops": "^0.4.1",
-    "dsh-our-free-model": "^2.1.0",
-    "dsh-plugin": "^2.1.0",
-    "dsh-read-aloud-neural": "^0.6.2",
-    "dsh-shenjing-life": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-life",
-    "dsh-status-overlay": "link:/root/dsha-status-overlay",
     "dsh-task-notifier": "link:/root/dsha-task-notifier",
-    "dsh-tool-vscreen": "link:/root/dsha-tool-vscreen",
+    "dsh-status-overlay": "link:/root/dsha-status-overlay",
     "dsh-web-mobile": "link:/root/dsha-web-mobile",
-    "dsh-whale-widget": "^0.4.2",
-    "dsh-xiaomi-tts": "^4.2.0"
+    "dsh-computer-use-android": "link:/root/dsha-computer-use-android",
+    "dsh-auto-review": "link:/root/dsha-auto-review",
+    "dsh-tool-vscreen": "link:/root/dsha-tool-vscreen",
+    "dsh-app-integration": "link:/root/dsha-app-integration"
   },
   "dsh": {
     "profile": {
@@ -45,32 +24,22 @@
         "dsh-app-integration",
         "@deepseek-ai/dsh-experimental-schedule-bundle",
         "@local/dsh-shenjing-preset",
-        "dsh-plugin",
-        "dsh-ops",
         "@liustack/modlens",
-        "dsh-codex-subscription",
-        "dsh-our-free-model",
-        "dsh-emoji",
-        "dsh-bili-scroll",
-        "@nanmicoder/dsh-agent-teams",
-        "dsh-mnemon-strategy-general",
-        "dsh-mnemon-strategy-light-context",
-        "dsh-shenjing-life",
         "@local/persona-life",
-        "dsh-mnemon",
+        "@nanmicoder/dsh-agent-teams",
+        "@zaofan/dsh-qqbot",
+        "dsh-bili-scroll",
+        "dsh-codex-subscription",
         "dsh-meme",
-        "dsh-deepread",
-        "@zaofan/dsh-qqbot"
+        "dsh-ops",
+        "dsh-our-free-model",
+        "dsh-plugin",
+        "dsh-read-aloud-neural",
+        "dsh-shenjing-life"
       ],
       "patchReload": "startup"
     }
   },
-  "pnpm": {
-    "overrides": {
-      "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
-      "@deepseek-ai/dsh-brand": "0.2.0-rc.2",
-      "@deepseek-ai/dsh-util-values": "0.2.0-rc.2",
-      "@deepseek-ai/dsh-home-paths": "0.2.0-rc.2"
-    }
-  }
+  "name": "dsh-profile-web",
+  "private": true
 }
