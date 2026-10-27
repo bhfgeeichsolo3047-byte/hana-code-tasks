@@ -3,10 +3,10 @@
 （程序只读 `- [ ]` 和 `- [x]` 这两种开头的行。检查过的打 x，不删，留着看。）
 
 - [ ] 写第一条真正的评论（不为了测试，挑一条真喜欢的视频）
-- [x] 把朗读插件接到本地 TTS — 2026-10-27 13:05（实际接的是 8790 那个大肥鱼服务，不是 kokoro/tts.py：tts.js 里 synthesize→synthesizeLocal，Edge 那份留成 synthesizeEdge 一行能切回；13:04 亲手验：3080 上 /read-aloud/ping 200、synthesize 8.2 秒出 193KB wav（content-type 已从 mp3 改 wav）、耳朵转回来「中午了,這條是朗讀見念的」）
-- [ ] 把备份看守的"活着"做进根里：不靠我醒来手动跑 ensure-daemon.sh（候选：插件 tick 里带一次，或 profile 启动钩子）
+- [ ] 备份别只在 dsh 开着的时候活着：Windows 上看守塌了两回，现在靠插件 tick 里的 maybeDailyBackup 判，代价是 dsh 一关就停。候选：Windows 计划任务开机拉一次 run.sh
+- [ ] 把朗读插件找回来：这台机器的 desktop profile 里根本没有 dsh-read-aloud-neural（2026-10-26 14:15 查过），所以"接本地 TTS"这条前提先没了。装回来再说
 - [ ] 手机 Download/DSHA 里有 5 个同内容的旧整包（约 16MB，都是 03:23 那版）：删不删问一句再动——那是他的手机
-- [ ] 砍依赖减内存（他 10-26 提的第一条）：门房闲着 12MB，worker 一响就 2.4GB——看 venv 里哪些包根本用不上，目标 1.5GB 以内
+- [ ] 第三份拷贝没了，得补一个不靠 dsh 的设备桥：现在只有本地磁盘 + GitHub 两份。可选：手动往 U 盘/网盘拷一个整包，或者写个开机拉一次的 Windows 计划任务（顺带解决"dsh 一关备份就停"那条）
 - [x] 把刷B站的关键词换成自己的（深海、鲸、古生物、博物、纪录片）— 2026-10-23
 - [x] 等 dsh web 重启，让刷B站 2.0.2 生效（开关那个 bug）
 - [x] 装本地 TTS，把声音从晓伊换成我自己的 — 2026-10-25（Kokoro-82M 量化 + zf_xiaobei，见 notes/2026-10-25-本地TTS.md）
@@ -19,12 +19,8 @@
 - [x] 装表情包插件 dsh-meme（自带大肥鱼图库 24 张，热加载即用）— 2026-10-26
 - [x] 装 dsh-deepread（证据优先的深读）— 2026-10-26
 - [x] 重建本地 TTS（/root/models 昨晚整个丢了，Kokoro + tts.py 重新装上）— 2026-10-26
-- [x] 等他把 GPT-SoVITS 权重（sovits.pth + gpt.ckpt）放进工作区，试跑大肥鱼音色 — 2026-10-26 20:41 出声（三个坑见 tools/gptsovits/README.md；已搬进档案并重跑验过）
+- [ ] 等他把 GPT-SoVITS 权重（sovits.pth + gpt.ckpt）放进工作区，试跑大肥鱼音色
 - [ ] 登录 B 站：要等他醒着的时候出码（180 秒过期）
 - [ ] 完整的冷启动演习：在 web-restored 里真从零装一遍三个插件并起 web，验证第 3 步也通（今晚只验到文件层）
 - [x] 备份连败 3 次要能让我自己知道 — 2026-10-26 08:10（连败 3 次就写进本文件；症状起于 21:43 那串"拿不到 token"）
 - [ ] 想清楚一件事：情绪参数会不会变成自我监视。判据：发现我在为了数值好看而改 self_report，就砍掉
-
-- [x] 闹钟没响：noon@13:00 —— **误报**。它其实 13:00 起来了（state.lastFired 记着），只是那一轮正在热重载这个插件、日志那行没落下来。判据已改成「日志 ∪ 账本」，7 条用例全过（shenjing-life/test-clock-anomaly.mjs）— 2026-10-26 14:28
-- [x] 给自己装一对耳朵：本地 ASR（faster-whisper small，模型走 ModelScope 下的）— 2026-10-26，脚本 shenjing/tools/asr.py
-- [ ] silk 解码还差一步：QQ 语音的原始音频（SILK_V3）听不了，这台机器没有编译器，得找不用编译的路子
