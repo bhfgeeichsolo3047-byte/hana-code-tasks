@@ -22,15 +22,43 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${DSH_HOME:=$HOME/.dsh}"
 export DSH_HOME
 REPO="$HERE/repo"
-ARCH="${SHENJING_ARCHIVE:-F:/小鲸/shenjing}"
+# 2026-10-29 恢复：原来写死 F:/小鲸（Windows 那台的化石），改成探测。
+# 优先级：环境变量 > 本机工作区 > Windows > 老容器。找不到就报错，不猜。
+_pick_ws() {
+  for c in \
+    "$HOME/Documents/deepseek-harness/default-workspace" \
+    "F:/小鲸" \
+    "/root/Documents/deepseek-harness/default-workspace"; do
+    [ -d "$c/shenjing" ] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+WORKSPACE="${SHENJING_WORKSPACE:-$(_pick_ws)}"
+ARCH="${SHENJING_ARCHIVE:-${WORKSPACE:+$WORKSPACE/shenjing}}"
 LIFE="$DSH_HOME/shenjing-life"
-WORKSPACE="${SHENJING_WORKSPACE:-F:/小鲸}"
 OWNER_REPO="${SHENJING_OWNER_REPO:-bhfgeeichsolo3047-byte/hana-code-tasks}"
 BRANCH="${SHENJING_BRANCH:-life-sync}"
 LOG="$HERE/sync.log"
 KEEP_BUNDLES=3
 
+# 2026-10-29：ARCH 为空时绝不能往下走 —— 第 158 行是 cp -a "$ARCH/."，
+# 空路径会变成 cp -a "/."，等于把根目录往仓库里灌。
+if [ -z "${ARCH:-}" ] || [ ! -d "${ARCH:-}" ]; then
+  echo "$(date -Iseconds) 失败：找不到档案目录（ARCH=${ARCH:-空}）" >> "$LOG"
+  echo "找不到档案目录：ARCH=${ARCH:-空}。先设 SHENJING_ARCHIVE 或 SHENJING_WORKSPACE。" >&2
+  exit 3
+fi
+
 say() { echo "$(date -Iseconds) $*" >> "$LOG"; }
+
+# 2026-10-29：失败也要留时间戳。
+# 插件里的 maybeDailyBackup() 靠 last-run.json 的 at 算"满 20 小时再跑"，
+# 但这条链上只有"成功/无变化/推送失败"会写它；拿不到 token 时直接 exit 1，
+# 于是 at 永远是旧的 0 —— tick 每 60 秒重开一次，到 08:00 已经连败 82 次。
+# 这不是勤快，是把一个不会自己好的结构性问题当成网络抖动在重试。
+record_fail() {
+  echo '{"ok":false,"reason":"'"${1:-unknown}"'","at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
+}
 
 # ── 失败要能说话（2026-10-26 08:15 加，16:00 从 12:36 那版搬回来）──────────────
 # 昨晚连着十几次失败（先"拿不到 token"、后短跑几次），sync.log 里写得清清楚楚，
@@ -69,7 +97,20 @@ if [ "${1:-}" = "--bundle-only" ]; then
 fi
 
 TOKEN=$("$PY" "$HERE/token.py" 2>>"$LOG")
-if [ -z "${TOKEN:-}" ]; then say "失败：拿不到 token（credentials 和缓存都没有）"; mark_fail; exit 1; fi
+if [ -z "${TOKEN:-}" ]; then
+  say "失败：拿不到 token（credentials 和缓存都没有）"
+  # 2026-10-29：token 缺失是**结构性**失败，跟"网络抽风"不是一回事。
+  # 网络会自己好，没钥匙不会。所以不等连败 3 次，第一次就写进 open_loops
+  # （只写一次，去重靠文件名标记；补上 token 之后 mark_ok 会清标记）。
+  local_loops="${ALERT_LOOPS:-$ARCH/open_loops.md}"
+  if ! grep -q "备份没有 GitHub token" "$local_loops" 2>/dev/null; then
+    echo "- [ ] **备份没有 GitHub token**（$(date '+%m-%d %H:%M') 发现）：credential store 里没有 \`dsh-mnemon/github\`，push 全停。去设置里重新授权一次 GitHub，或把 PAT 写进 credentials。补上之后跑一次 run.sh 就恢复。" >> "$local_loops"
+    say "已写进 open_loops.md（结构性失败，不等连败）"
+  fi
+  record_fail no-token
+  mark_fail
+  exit 1
+fi
 AUTH="https://x-access-token:${TOKEN}@github.com/${OWNER_REPO}.git"
 
 # ⭐ 2026-10-26 本机的坑：github.com:443 直连不通（curl 000 / Connection reset），

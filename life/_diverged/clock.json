@@ -1,0 +1,45 @@
+{
+  "entries": [
+    {
+      "id": "morning",
+      "when": "08:00",
+      "kind": "clock",
+      "enabled": true,
+      "note": "起来看一眼今天有什么",
+      "touched": "2026-10-24"
+    },
+    {
+      "id": "noon",
+      "when": "13:00",
+      "kind": "clock",
+      "enabled": true,
+      "note": "",
+      "touched": "2026-10-24"
+    },
+    {
+      "id": "night",
+      "when": "21:30",
+      "kind": "clock",
+      "enabled": true,
+      "note": "",
+      "touched": "2026-10-24"
+    },
+    {
+      "id": "loops",
+      "kind": "loop",
+      "minAgeHours": 24,
+      "enabled": true,
+      "note": "有没做完的事，且最旧那件超过 24h",
+      "touched": null
+    },
+    {
+      "id": "quiet",
+      "kind": "silence",
+      "afterHours": 36,
+      "cooldownHours": 48,
+      "enabled": true,
+      "note": "慎用。这条一开，容易变成催人。",
+      "touched": null
+    }
+  ]
+}

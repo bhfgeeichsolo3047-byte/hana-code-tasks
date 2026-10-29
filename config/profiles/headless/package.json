@@ -1,17 +1,12 @@
 {
   "name": "dsh-profile-headless",
   "private": true,
-  "dependencies": {
-    "dsh-connect-workbuddy": "link:C:/Users/Administrator/.dsh-beta/profiles/desktop/node_modules/dsh-connect-workbuddy",
-    "dsh-shenjing-life": "link:F:/小鲸/shenjing-life"
-  },
+  "dependencies": {},
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-headless",
-        "dsh-shenjing-life",
-        "dsh-connect-workbuddy"
+        "@deepseek-ai/dsh-headless"
       ]
     }
   }

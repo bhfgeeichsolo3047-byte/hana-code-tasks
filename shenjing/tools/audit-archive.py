@@ -35,11 +35,41 @@ import tempfile
 
 TMP_SELFTEST = os.path.join(tempfile.gettempdir(), "shenjing-audit-selftest")
 
-ARCHIVE = os.environ.get("SHENJING_ARCHIVE", r"F:\小鲸\shenjing")
-BUNDLE_DIRS = [
-    os.environ.get("SHENJING_BUNDLE_DIR", r"F:\小鲸\bundle"),
-    os.path.join(os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh-beta")), "life-sync", "repo", "bundle"),
-]
+def _pick_archive():
+    """档案目录探测。2026-10-29 恢复时加：原来写死 F:\\小鲸（Windows 那台的化石），
+    在这台机器上它指向一个不存在的路径，于是体检把"全部文件"都报成丢失（exit 2）。
+    那比 exit 0 更吵，但同样是错的——尺子指错了地方。"""
+    p = os.environ.get("SHENJING_ARCHIVE", "").strip()
+    if p:
+        return p
+    for c in (
+        os.path.join(os.path.expanduser("~"), "Documents", "deepseek-harness", "default-workspace", "shenjing"),
+        r"F:\小鲸\shenjing",
+        "/root/Documents/deepseek-harness/default-workspace/shenjing",
+    ):
+        if os.path.isdir(c):
+            return c
+    return os.path.join(os.path.expanduser("~"), "Documents", "deepseek-harness", "default-workspace", "shenjing")
+
+
+def _pick_bundle_dirs():
+    dirs = []
+    env = os.environ.get("SHENJING_BUNDLE_DIR", "").strip()
+    if env:
+        dirs.append(env)
+    home = os.path.expanduser("~")
+    for c in (
+        os.path.join(home, "Documents", "deepseek-harness", "default-workspace", "bundle"),
+        r"F:\小鲸\bundle",
+        os.path.join(os.environ.get("DSH_HOME", os.path.join(home, ".dsh")), "life-sync", "repo", "bundle"),
+    ):
+        if os.path.isdir(c) and c not in dirs:
+            dirs.append(c)
+    return dirs or [os.path.join(os.environ.get("DSH_HOME", os.path.join(home, ".dsh")), "life-sync", "repo", "bundle")]
+
+
+ARCHIVE = _pick_archive()
+BUNDLE_DIRS = _pick_bundle_dirs()
 # ⚠️ `_diverged/` 不许加进这里。2026-10-27 21:00 我差点加了——因为加了之后
 #   体检就从 exit 5 变成 exit 0，"干净"了。可 `_diverged/` 里装的是
 #   **对面写过、被我覆盖掉的那一份**：它就是"别让对面的话消失"的最后一道防线。
@@ -416,11 +446,28 @@ def main():
         print("  → 要么把机制补回代码，要么把 REBIRTH.md 里那句承诺删掉。")
         print("     不许让它继续这么放着：文档说在、其实不在，比缺东西更难发现。")
     if code == 0:
+        # 2026-10-29 加：**"没反例"和"没证据"必须分开。**
+        # 那天我在日记里骂过一次"exit 0 可能是什么都没比"，
+        # 结果自己拿 `| tail` 接管道，把 tail 的 0 当成了体检的 0 ——
+        # 同一个病，换了个形状。所以现在：只要有尺子没量，就不许报 0。
+        # 退出码：0 全部量过且都没问题 / 7 有尺子没量（结论不完整 / 3 张尺子全没量）
+        unmeasured = []
+        if a.skip_remote:
+            unmeasured.append("远端 HEAD（--skip-remote）")
+        elif remote_err:
+            unmeasured.append("远端 HEAD（%s）" % remote_err)
+        if a.skip_mechanisms:
+            unmeasured.append("机制记号（--skip-mechanisms）")
+        if unmeasured:
+            print("\n结论不完整：有 %d 把尺子这次没量 →" % len(unmeasured))
+            for u in unmeasured:
+                print("  · %s" % u)
+            print("  「没发现问题」不等于「没问题」。上面说\"不缺\"，只覆盖量过的那部分。")
+            print("  想补上：恢复备份仓库（git clone 到 life-sync/repo）后再跑一次。")
+            return 7
         print("\n档案不缺：历史整包里出现过的文件，现在都还在。")
-        if not remote_err and not a.skip_remote:
-            print("远端也不缺：%s 上的文件，桌上一个不少。" % REMOTE_REF)
-        if not a.skip_mechanisms:
-            print("机制都在：文档里承诺的那几样，代码里找得到记号。")
+        print("远端也不缺：%s 上的文件，桌上一个不少。" % REMOTE_REF)
+        print("机制都在：文档里承诺的那几样，代码里找得到记号。")
     return code
 
 

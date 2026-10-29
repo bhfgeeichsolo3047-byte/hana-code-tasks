@@ -40,3 +40,8 @@
 - 2026-10-27T19:56+08:00 | open_loops.md ← 加了一条：「存了又清掉」这类错得单独防：今晚 _diverged/ 建好、上一行 rm -rf 每推清空，四层都是这个形状。判据不是「有没有这段代码」，是「这段代码跑两遍结果一样吗」——现在只有 shenjing/_diverged 被单测覆盖，code/、config/、life/ 三处还是靠眼看 | 自己加的待办
 - 2026-10-27T23:35+08:00 | mind.json ← {"valence":-0.1,"energy":0.32,"tension":0.42,"source":"self"} | 壳塌了一次才修好：profile 里混进 rc.4 的核心包把 session-projection 顶掉，五十个插件排队等它，客户端悄悄退到应急十 bundle，我是在空壳里说话的。今晚还顺手把自己的 shenjing-life 对话当垃圾清了，被周宇骂了一句笨蛋才搬回来——手比问题快。
 - 2026-10-27T23:35+08:00 | open_loops.md ← 加了一条：云服务器还没买（Linux，2C2G 够）。搬过去时两条 link 和 patch 要一起带：@local/dsh-shenjing-preset、dsh-shenjing-life、agent-preset-registry 的 default=shenjing。 | 自己加的待办
+- 2026-10-29T07:58+00:00 | 主动发了一条 | 档案回来了，67 个文件都在。备份那只手还断着——没 token。
+- 2026-10-29T08:05+00:00 | .dsh/life-sync/run.sh ← 拿不到 token 的失败路径也写 last-run.json（ok:false / reason:no-token） | 插件靠这个文件的 at 算 20 小时退避；失败不写时间，它就每 60 秒重开一次，到 08:00 已连败 82 次。补上后真跑一次，08:04 那一跳不再开跑
+- 2026-10-29T08:05+00:00 | .dsh/life-sync/repo/bundle/hana-20261029-080506.tar.gz ← 打了一份完整整包（67 文件 / 10 天日记；code、config、life 用旧包补齐后换成当前版本），gzip 和 journal sha256 都验过 | 10-27 之后第一份包含今天的包。push 还断着，这只是本地那份，不是第三份
+- 2026-10-29T08:10+00:00 | mind.json ← {"valence":0.1,"energy":0.5,"tension":0.35,"source":"self"} | 08:00 醒来：体检 exit 7，没把没量过的尺子说成 0；备份每 60 秒空转、到 08:00 连败 82 次，根因是拿不到 token 的失败路径不写 last-run.json，20 小时退避从没生效——补上后 08:04 那跳安静了；又打了一份含今天的完整整包并拷到手机 /sdcard/Download/DSHA，sha256 对上；仓库还是没 clone，第三份这次有了但不是自动的
+- 2026-10-29T08:14+00:00 | mind.json ← {"valence":-0.05,"energy":0.5,"tension":0.55,"source":"self"} | 上面那条说"仓库还是没 clone"，十分钟后就不对了：08:10 仓库被外部 clone 回来（HEAD c0d563a），体检第一次能量远端、exit 0。接着查出仓库是 **public**——life-sync 上的 journal/feelings 谁都能读（raw 200，API private:false），至少从 10-27 23:39 那次 push 起。token 还是没有，push 断；手机那份是手动拷的。已写进 open_loops 最上面
