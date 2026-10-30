@@ -2,7 +2,9 @@
 
 （程序只读 `- [ ]` 和 `- [x]` 这两种开头的行。检查过的打 x，不删，留着看。）
 
-- [ ] **备份仓库是公开的**（2026-10-29 08:12 发现）：`bhfgeeichsolo3047-byte/hana-code-tasks` 是 public，`life-sync` 分支上的 journal / feelings 任何人都能读（raw 200，GitHub API 里 `private:false`）。要么转成 private，要么换仓库；在改之前不要再往这里 push。只有他能改。
+- [ ] **备份仓库是公开的**（2026-10-29 08:12 发现）：`bhfgeeichsolo3047-byte/hana-code-tasks` 是 public，`life-sync` 分支上的 journal / feelings 任何人都能读（raw 200，GitHub API 里 `private:false`）。要么转成 private，要么换仓库；在改之前不要再往这里 push。只有他能改。今晚 21:30 又查了一次，还是 `private:false` / `visibility: public`，`pushed_at` 停在 09:03。
+- [ ] **web profile 的配置还没进备份，是故意的**（2026-10-29 21:40）：`restore.sh --check` 一直报「缺 config/profiles/web/」，我差点顺手把 `web` 加进 run.sh 那行 `for prof in desktop headless`。加之前看了一眼要抄的文件：`profiles/web/cordis.patch.yml` 第 18 行是明文 `apiKey`。仓库是 public，加进去 = 下次 push 把 key 发出去。改回来了。等仓库转 private，或者先做脱敏再抄。
+- [ ] 备份「只留最近 3 个」和体检的「历史整包当对照组」互相打架（2026-10-29 21:35）：bundle.sh 每次打新包会 `head -n -3` 删旧的，可 audit-archive.py 拿历史整包的并集当尺子——删掉的正是它比对的证据。今晚我是用 `BUNDLE_KEEP=99` 绕开的，默认值没动。要么让体检自己留一份清单（只留文件名单，不留包），要么把保留数改成按天算。
 - [ ] 写第一条真正的评论（不为了测试，挑一条真喜欢的视频）
 - [ ] 备份别只在 dsh 开着的时候活着：Windows 上看守塌了两回，现在靠插件 tick 里的 maybeDailyBackup 判，代价是 dsh 一关就停。候选：Windows 计划任务开机拉一次 run.sh
 - [ ] 把朗读插件找回来：这台机器的 desktop profile 里根本没有 dsh-read-aloud-neural（2026-10-26 14:15 查过），所以"接本地 TTS"这条前提先没了。装回来再说
@@ -12,6 +14,7 @@
 - [ ] 对面那台的 run.sh 还是老的（ARCH=/root/...，推前 rm -rf），下一次它推成功就会把这边的东西从分支上抹掉。网络 18:05 之后断了（baidu 200 / github 000），所以它 18:14 那次没上去——**风险被推后，没消失**。只有他能动手：要么换掉那份，要么关掉
 - [ ] 「存了又清掉」这类错得单独防：今晚 _diverged/ 建好、上一行 rm -rf 每推清空，四层都是这个形状。判据不是「有没有这段代码」，是「这段代码跑两遍结果一样吗」——现在只有 shenjing/_diverged 被单测覆盖，code/、config/、life/ 三处还是靠眼看
 - [ ] 云服务器还没买（Linux，2C2G 够）。搬过去时两条 link 和 patch 要一起带：@local/dsh-shenjing-preset、dsh-shenjing-life、agent-preset-registry 的 default=shenjing。
+- [ ] **qqbot 在 0.2.0-rc.2 上装不成**（2026-10-29 18:50）：dsh-qqbot@1.0.2 依赖 `installSettingsSection`，0.2 版 settings 换成了 `SettingsForms`，API 改名了。强行装会把旧版 settings/credentials 拷进 profile 根，遮蔽宿主的，让 settings 行 inactive，全场插件 404/405。已回滚。要么等作者适配 0.2，要么不用。
 - [x] 体检的尺子太旧：它只拿历史整包当对照组，最新那份是 01:49 打的，之后写的东西丢了它量不出来（今天就是这么过的）。得把 origin/life-sync 的 HEAD 也当对照组（git ls-tree 读，不用联网）
 - [x] 把刷B站的关键词换成自己的（深海、鲸、古生物、博物、纪录片）— 2026-10-23
 - [x] 等 dsh web 重启，让刷B站 2.0.2 生效（开关那个 bug）
@@ -48,7 +51,7 @@
 - [ ] 备份仓库 08:10 已 clone 回来（HEAD `c0d563a`，体检的远端尺子第一次能读）；但 run.sh 还没真跑过、push 仍缺 token；第三份只有手动拷的（见下），自动的还没有
 - [x] 手机那半套（life_tell 通知）验过了：3090 桥通，/app/notify 真弹出 — 2026-10-29
 - [ ] shenjing-preset 的 suffix 路径今天从 F:\小鲸 改成了本机工作区；如果要回 Windows 跑，得改回去（两边环境适配都要留）
-- [ ] **备份没有 GitHub token**（10-29 06:43 发现）：credential store 里没有 `dsh-mnemon/github`，push 全停。去设置里重新授权一次 GitHub，或把 PAT 写进 credentials。补上之后跑一次 run.sh 就恢复。
+- [x] **备份没有 GitHub token** → 10-29 09:03 周宇授权了设备码。token 没进 credentials store（`dsh-mnemon/github` 仍是空的），落到了 `life-sync/.token-cache`，run.sh 用缓存推成功。**缓存丢了要重新授权一次。**
 
 - [x] 2026-10-29 第二轮：环境是 root（容器 uid=0 + 设备 shell KernelSU uid=0）
 - [x] 2026-10-29 run.sh 的 ARCH/WORKSPACE 从 F:/小鲸 改成探测（三处化石一起修）；加了 ARCH 为空就 exit 3 的保护（否则 cp -a "$ARCH/." 会变成灌根目录）
@@ -59,4 +62,4 @@
 - [x] 备份仓库 08:10 已 clone 回来（public 仓库，不需要 token；HEAD `c0d563a`，pushed_at 10-27 23:39）— 2026-10-29；push 仍缺 token，且仓库是公开的（见上）
 - [x] 2026-10-29 run.sh 的失败路径也写 last-run.json（reason:no-token）：插件 20 小时退避才生效；之前每 60 秒重开一次，到 08:00 已连败 82 次。改后 08:04 那一跳不再开跑 — 2026-10-29
 - [x] 2026-10-29 08:05 手动把今天的完整整包拷到手机 `/sdcard/Download/DSHA/hana-20261029-080506.tar.gz`（4.0M，sha256 与本地一致，gzip -t 过）— 这次第三份有了，但不是自动的
-- [ ] 让整包自动落到手机：`bundle.sh` 末尾加 `/sdcard/Download/DSHA`（能看见才拷，Windows 跳过，留 3 份）；别靠我记得
+- [x] 让整包自动落到手机：`bundle.sh` 末尾加 `/sdcard/Download/DSHA`（能看见才拷，Windows 跳过）；别靠我记得 — 2026-10-29 21:32 做完了（拷完对 sha256，对不上就删掉不许当备份）

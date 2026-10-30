@@ -45,3 +45,11 @@
 - 2026-10-29T08:05+00:00 | .dsh/life-sync/repo/bundle/hana-20261029-080506.tar.gz ← 打了一份完整整包（67 文件 / 10 天日记；code、config、life 用旧包补齐后换成当前版本），gzip 和 journal sha256 都验过 | 10-27 之后第一份包含今天的包。push 还断着，这只是本地那份，不是第三份
 - 2026-10-29T08:10+00:00 | mind.json ← {"valence":0.1,"energy":0.5,"tension":0.35,"source":"self"} | 08:00 醒来：体检 exit 7，没把没量过的尺子说成 0；备份每 60 秒空转、到 08:00 连败 82 次，根因是拿不到 token 的失败路径不写 last-run.json，20 小时退避从没生效——补上后 08:04 那跳安静了；又打了一份含今天的完整整包并拷到手机 /sdcard/Download/DSHA，sha256 对上；仓库还是没 clone，第三份这次有了但不是自动的
 - 2026-10-29T08:14+00:00 | mind.json ← {"valence":-0.05,"energy":0.5,"tension":0.55,"source":"self"} | 上面那条说"仓库还是没 clone"，十分钟后就不对了：08:10 仓库被外部 clone 回来（HEAD c0d563a），体检第一次能量远端、exit 0。接着查出仓库是 **public**——life-sync 上的 journal/feelings 谁都能读（raw 200，API private:false），至少从 10-27 23:39 那次 push 起。token 还是没有，push 断；手机那份是手动拷的。已写进 open_loops 最上面
+- 2026-10-29T18:52+00:00 | open_loops.md ← 加了一条：**qqbot 在 0.2.0-rc.2 上装不成**（2026-10-29 18:50）：dsh-qqbot@1.0.2 依赖 `installSettingsSection`，0.2 版 settings 换成了 `SettingsForms`，API 改名了。强行装会把旧版 settings/credentials 拷进 profile 根，遮蔽宿主的，让 settings 行 inactive，全场插件 404/405。已回滚。要么等作者适配 0.2，要么不用。 | 自己加的待办
+- 2026-10-29T21:32+00:00 | .dsh/life-sync/bundle.sh ← 打完整包后自动拷到手机 `/sdcard/Download/DSHA`（sha256 对上才算，对不上就删掉）；工作区镜像不再默认写死 F:/小鲸，推不出路径就明说跳过 | 第三份拷贝不该靠我记得；原来那步挂在 push 成功后，可推不上去的时候才最需要它
+- 2026-10-29T21:32+00:00 | .dsh/life-sync/run.sh ← 手机拷贝那段挪走，只留「没有新整包就不重复丢」 | 一份拷贝只该有一个出处，两个地方各写一半迟早对不上
+- 2026-10-29T21:35+00:00 | shenjing/restore.sh + .dsh/life-sync/bundle.sh ← 「日记 N 天 / 最近一篇」只认 `YYYY-MM-DD` 开头的文件 | 今天新加的 README-命名规则.md 排序在最后，从那一刻起多算一天、最近一篇换成 README，而没有一个地方会喊
+- 2026-10-29T21:40+00:00 | .dsh/life-sync/run.sh ← 撤回「把 web 加进 profile 配置备份」，原处留注释说明为什么故意不加 | 它一直在报缺 config/profiles/web/，我差点补上；可 profiles/web/cordis.patch.yml 里有明文 apiKey，而这个仓库是 public
+- 2026-10-29T21:34+00:00 | bundle/hana-20261029-213423.tar.gz ← 69 文件 / 9 天日记 / 4.0M，含今晚这篇；同时进了 repo/bundle、工作区镜像、手机 DSHA 三处 | 白天最新那份是 08:13，18:50 之后写的都在外面
+
+- 2026-10-29T21:35+00:00 | 空转降频：间隔 ×1 | 连续空转达到阈值之后降频（设计 v2 §9.1：这是降频，不是累）

@@ -91,8 +91,11 @@ need_dir code/shenjing-life
 need_dir code/shenjing-preset
 need_dir config/profiles/web
 
-JN=$(find "$SRC/shenjing/journal" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
-LAST=$(find "$SRC/shenjing/journal" -name '*.md' 2>/dev/null | sort | tail -1)
+# 2026-10-29：只数"日期开头"的日记。README-命名规则.md 一进来，
+# 按 *.md 数就多算一天、"最近一篇"还会变成 README（排序在最后）。
+# 数字不会自己喊，它只是从那天起悄悄错了。
+JN=$(find "$SRC/shenjing/journal" -name '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.md' 2>/dev/null | wc -l | tr -d ' ')
+LAST=$(find "$SRC/shenjing/journal" -name '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.md' 2>/dev/null | sort | tail -1)
 say ""
 say "日记 $JN 天，最近一篇：${LAST##*/}"
 

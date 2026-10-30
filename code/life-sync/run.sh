@@ -221,6 +221,12 @@ done | wc -l)
 
 # profile 配置：package.json + 补丁层，用来重建 profile
 # （同上：不清空，只覆盖现在有的那几个文件）
+# 2026-10-29 21:40：web（正在跑的那个）**故意不在这里**。
+# 我本来顺手把 web 加进了这行——因为 restore.sh --check 一直报「缺 config/profiles/web/」。
+# 加完去看了一眼要抄的文件：profiles/web/cordis.patch.yml 第 18 行是明文的 apiKey。
+# 这个仓库是 public。加这一行 = 下次 push 就把 key 发出去。
+# 所以不改。缺的那块留成 open_loops，等仓库转 private 或改成脱敏再抄。
+# 教训：把某个东西加进备份之前，先看它里面有什么。备份会把里面的都带出去。
 for prof in desktop headless; do
   mkdir -p "$REPO/config/profiles/$prof"
   for f in package.json cordis.patch.yml cordis.yml pnpm-lock.yaml pnpm-workspace.yaml; do
@@ -289,15 +295,10 @@ if push_retry; then
   SHA=$(GIT -C "$REPO" rev-parse --short HEAD)
   say "已推送 $SHA"
 
-  # 第三份拷贝：整包丢到手机存储 Download/DSHA 里。
-  # ⚠️ 2026-10-26 16:00：这条路在 Windows 机器上**没有了**（没有 /app/export 设备桥、
-  #    也没有 .bridge_headers）。不是删掉，是明说：手机上那份现在得手动拷。
-  #    留着这段是为了让"曾经有过第三份"这件事不被忘掉，复活回手机时能照着接。
-  if [ "${BUNDLE_NEW:-0}" != "1" ]; then
-    say "这次没有新整包，手机上那份不重复丢"
-  elif [ ! -f "$DSH_HOME/.bridge_headers" ]; then
-    say "这台机器没有设备桥接凭据，跳过手机那份（整包在 $REPO/bundle 和 $WORKSPACE/bundle）"
-  fi
+  # 第三份拷贝（手机那份）不在这里了 —— 2026-10-29 21:30 挪进 bundle.sh。
+  # 原因：这段原来挂在"push 成功"后面，网络一断第三份就跟着断；可恰恰推不上去的时候
+  # 最需要它。现在包一打出来就拷到手机并对 sha256，跟推没推上去无关。
+  [ "${BUNDLE_NEW:-0}" = "1" ] || say "这次没有新整包，手机上那份不重复丢"
 
   echo '{"ok":true,"changed":true,"sha":"'"$SHA"'","at":"'"$(date -Iseconds)"'"}' > "$HERE/last-run.json"
   mark_ok
