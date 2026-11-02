@@ -1,4 +1,21 @@
 {
   "version": 1,
-  "bodies": []
+  "bodies": [
+    {
+      "id": "aa485e22-d947-4812-a27b-5740e64c3a2c",
+      "name": "Mnemon Native",
+      "description": "小鲸的长期记忆主库（SQLite + 向量检索）。存放跨会话的偏好、决定、环境事实、教训与人物信息；需要回溯过去聊过什么、做过什么、改过什么主意时从这里检索。",
+      "active": true,
+      "createdAt": "2026-10-31T17:10:04.228Z",
+      "updatedAt": "2026-10-31T17:15:57.799Z"
+    },
+    {
+      "id": "default",
+      "name": "default",
+      "description": "Existing Mnemon Store discovered on disk.",
+      "active": true,
+      "createdAt": "2026-10-31T17:09:09.123Z",
+      "updatedAt": "2026-10-31T17:09:09.123Z"
+    }
+  ]
 }

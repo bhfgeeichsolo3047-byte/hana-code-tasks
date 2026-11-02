@@ -18,7 +18,7 @@
       ],
       "createdAt": "2026-10-22T14:24:19.535Z",
       "updatedAt": "2026-10-22T14:24:19.535Z",
-      "lastAccessedAt": "2026-10-22T14:24:19.535Z",
+      "lastAccessedAt": "2026-10-31T08:57:13.873Z",
       "revision": 1,
       "contentHash": "441b003e1e4e91a027272637e46d86dd634630fcc8b6b3b4c413050689c7558b",
       "sizeBytes": 4452,
@@ -46,7 +46,7 @@
       ],
       "createdAt": "2026-10-22T14:52:54.680Z",
       "updatedAt": "2026-10-22T14:52:54.680Z",
-      "lastAccessedAt": "2026-10-22T15:47:12.034Z",
+      "lastAccessedAt": "2026-10-31T15:59:02.047Z",
       "revision": 1,
       "contentHash": "cbf55f4dc45e59524d23ead24447fd80541b7d02ea98994a6d224bbff6d71a43",
       "sizeBytes": 6047,
@@ -84,7 +84,7 @@
       ],
       "createdAt": "2026-10-22T15:47:39.351Z",
       "updatedAt": "2026-10-22T15:47:39.351Z",
-      "lastAccessedAt": "2026-10-22T15:52:14.459Z",
+      "lastAccessedAt": "2026-10-31T16:41:10.451Z",
       "revision": 1,
       "contentHash": "6251c91d01369cd4ab36bd31d7c0c2a29e40c209e12fcca223047b379a450364",
       "sizeBytes": 4955,
@@ -105,7 +105,7 @@
       ],
       "createdAt": "2026-10-22T16:20:59.835Z",
       "updatedAt": "2026-10-22T16:20:59.835Z",
-      "lastAccessedAt": "2026-10-22T16:20:59.835Z",
+      "lastAccessedAt": "2026-11-02T14:46:38.485Z",
       "revision": 1,
       "contentHash": "40a953cf0cfd17ff684fe9f8efd44e50ca9f8fc75490aab9736d56dd083a4b2b",
       "sizeBytes": 3588,
@@ -128,10 +128,290 @@
       ],
       "createdAt": "2026-10-25T11:02:53.034Z",
       "updatedAt": "2026-10-25T11:02:53.034Z",
-      "lastAccessedAt": "2026-10-25T11:02:53.034Z",
+      "lastAccessedAt": "2026-11-02T07:21:18.295Z",
       "revision": 1,
       "contentHash": "bf2f3fef50d2f24854d35455abb8ec5320846d81954ec117f3568a899670e2af",
       "sizeBytes": 4357,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "fc658c95-65f2-4f87-8102-037d8ada4970",
+      "title": "DSH Go 锁屏保活与唤醒解锁：真机验证交接",
+      "description": "Android 15 真机上设备 watchdog、容器心跳、ADB 唤醒/无密码解锁的已验证实现、脚本路径、限制与未测恢复场景。",
+      "status": "active",
+      "filename": "dsh-go-fc658c95.md",
+      "relativePath": "documents/active/dsh-go-fc658c95.md",
+      "sourcePaths": [
+        "shenjing/keepalive/device-watchdog.sh",
+        "shenjing/keepalive/install-watchdog.sh",
+        "shenjing/keepalive/heartbeat.cjs",
+        "shenjing/keepalive/README.md",
+        "shenjing/discoveries/2026-10-31-唤醒解锁.md",
+        "shenjing/discoveries/2026-10-31-通道侦察.md",
+        "shenjing/journal/2026-10-31.md"
+      ],
+      "sessionIds": [
+        "74a06201-4bef-4adc-a0bd-ec2074ed4caf"
+      ],
+      "createdAt": "2026-10-31T06:44:39.018Z",
+      "updatedAt": "2026-10-31T06:44:39.018Z",
+      "lastAccessedAt": "2026-11-02T05:25:11.881Z",
+      "revision": 1,
+      "contentHash": "761d3243d4a946f41f95feec4e7c50324420f0e00af1c7ae99ee715b87c3df8c",
+      "sizeBytes": 3913,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "2a742664-e768-49a5-a28c-6cb00e1abbd0",
+      "title": "脑部分区动态系统：初步架构与表达控制约定",
+      "description": "用户提出的主模型＋情绪内分泌＋记忆表达控制三层脑系统设计讨论稿；重点是语言区只生成说话指令卡、去 AI 化表达规则、调用链与实施顺序。",
+      "status": "active",
+      "filename": "document-2a742664.md",
+      "relativePath": "documents/active/document-2a742664.md",
+      "sourcePaths": [],
+      "sessionIds": [
+        "f93f5565-bd4d-48ad-acda-a88a95a34d55"
+      ],
+      "createdAt": "2026-10-31T07:19:52.510Z",
+      "updatedAt": "2026-10-31T07:19:52.510Z",
+      "lastAccessedAt": "2026-10-31T16:41:10.451Z",
+      "revision": 1,
+      "contentHash": "2ecbf4cd29f0fa980dd4e6064fa61f6d972583c225ec1967363b7ef0faf4f8f0",
+      "sizeBytes": 5742,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "593e08c7-5fd6-4cd2-a22d-5d87b186c5d3",
+      "title": "shenjing-brain 接入现状：表达卡注入、小模型路由与延迟遗留",
+      "description": "深鲸脑区表达卡改走系统提示区的实现结论、tone 降级 bug、raccoon→workbuddy 小模型切换、日志与自检入口、同步等待导致的首次响应延迟。",
+      "status": "active",
+      "filename": "shenjing-brain-593e08c7.md",
+      "relativePath": "documents/active/shenjing-brain-593e08c7.md",
+      "sourcePaths": [
+        "shenjing-brain/lib/core.mjs"
+      ],
+      "sessionIds": [
+        "9dd87ed3-66ce-4bba-a642-cbd2a1e9b004"
+      ],
+      "createdAt": "2026-10-31T08:57:27.811Z",
+      "updatedAt": "2026-10-31T08:57:27.811Z",
+      "lastAccessedAt": "2026-10-31T16:41:10.451Z",
+      "revision": 1,
+      "contentHash": "dc255d33a38d7b79ddbd0f1530f37ffb5e44ed89b15d30e3d0a34c55470626cd",
+      "sizeBytes": 4053,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "7c1a8550-393b-41e3-b1b4-e720f2ea02c2",
+      "title": "shenjing-brain 外部小模型接入：siliconflow 超时、推理模型空 content、向量模型误选",
+      "description": "换到外部 OpenAI 兼容端点后踩到的三个坑（12s 超时、推理模型 max_tokens 吃满导致 content 为空、向量模型误填进对话模型框）与设置页 RPC/负缓存修法。",
+      "status": "active",
+      "filename": "shenjing-brain-siliconflow-content-7c1a8550.md",
+      "relativePath": "documents/active/shenjing-brain-siliconflow-content-7c1a8550.md",
+      "sourcePaths": [
+        "shenjing-brain/lib/core.mjs"
+      ],
+      "sessionIds": [
+        "ceb271cc-d422-42ba-ac3b-890e6d5fc299"
+      ],
+      "createdAt": "2026-10-31T16:41:43.017Z",
+      "updatedAt": "2026-10-31T16:41:43.017Z",
+      "lastAccessedAt": "2026-10-31T17:12:05.873Z",
+      "revision": 1,
+      "contentHash": "afa12e3d091a398c89f67941803ea3fd0f090a23ca8c5ac0658ddc4bc42b19f3",
+      "sizeBytes": 4683,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "493dab3d-4388-4ca3-b45a-37919318fd53",
+      "title": "Mnemon CLI 安装与 Mnemon Native 记忆空间接入（dsh-mnemon 0.5.37）",
+      "description": "本机安装 @mnemon-dev/mnemon 并接入 dsh-mnemon 的完整步骤、dsh 如何定位 mnemon 二进制、以及向量嵌入缺失时的降级表现。",
+      "status": "active",
+      "filename": "mnemon-cli-mnemon-native-dsh-mnemon-0-5-37-493dab3d.md",
+      "relativePath": "documents/active/mnemon-cli-mnemon-native-dsh-mnemon-0-5-37-493dab3d.md",
+      "sourcePaths": [
+        ".dsh/profiles/web/node_modules/dsh-mnemon-source-memory-spaces/lib/native-cli.js",
+        ".dsh/profiles/web/node_modules/dsh-mnemon-provider-mnemon-native/lib/index.js"
+      ],
+      "sessionIds": [
+        "276bac74-7c6d-4bfd-9d6a-a2b869e18de3"
+      ],
+      "createdAt": "2026-10-31T17:12:18.814Z",
+      "updatedAt": "2026-10-31T17:12:18.814Z",
+      "lastAccessedAt": "2026-10-31T17:12:18.814Z",
+      "revision": 1,
+      "contentHash": "1d60422252b309c235b990b40389aebe134928af34db2d29ef81189234cd27fb",
+      "sizeBytes": 4343,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "b6ac6c62-602d-4443-8a67-6d29a3646c0f",
+      "title": "shenjing-life 备份体检 exit 7：根因与只读镜像修复",
+      "description": "备份仓库为 public 导致只打包不推、repo 从未成为 git 仓库，体检远端尺子天天缺失；用 ref/ 只读镜像 + fetch 修复，以及仍存在的公开仓库与远端抹除风险。",
+      "status": "active",
+      "filename": "shenjing-life-exit-7-b6ac6c62.md",
+      "relativePath": "documents/active/shenjing-life-exit-7-b6ac6c62.md",
+      "sourcePaths": [
+        "shenjing/journal/2026-11-01.md"
+      ],
+      "sessionIds": [
+        "e6602c7c-c452-4a9d-8427-e554fdf93443"
+      ],
+      "createdAt": "2026-11-01T09:01:06.533Z",
+      "updatedAt": "2026-11-01T09:01:06.533Z",
+      "lastAccessedAt": "2026-11-02T05:25:11.881Z",
+      "revision": 1,
+      "contentHash": "a0accce842939493607256caa012657c17c9702472a4413a3b92cf368c473b62",
+      "sizeBytes": 3325,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "a3dadfaf-af3b-4b3c-9696-7c21aaf698ec",
+      "title": "QQ 发语音：SiliconFlow TTS 与声音克隆打通记录（2026-11-02）",
+      "description": "QQ 插件 send_media(kind=voice) 可直接发语音、市场无 TTS 输出插件；SiliconFlow /audio/speech 与 /uploads/audio/voice 克隆流程、必填 text 否则 500、MOSS 内置音色可用性、已发出的两条样本与待补的参考文本。",
+      "status": "active",
+      "filename": "qq-siliconflow-tts-2026-11-02-a3dadfaf.md",
+      "relativePath": "documents/active/qq-siliconflow-tts-2026-11-02-a3dadfaf.md",
+      "sourcePaths": [
+        "shenjing/voice",
+        ".dsh/profiles/web/node_modules/@zaofan/dsh-qqbot/dist/channel-tools.js"
+      ],
+      "sessionIds": [
+        "8680caad-9a8b-4e0d-a2ac-de1c3e240bea"
+      ],
+      "createdAt": "2026-11-02T05:54:44.950Z",
+      "updatedAt": "2026-11-02T05:54:44.950Z",
+      "lastAccessedAt": "2026-11-02T14:46:38.485Z",
+      "revision": 1,
+      "contentHash": "78b2124189aa83689916e7ac1e5420517e7b3926aa94bf918e8704e6551d2e7f",
+      "sizeBytes": 4661,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "eb8e9984-e505-4d4d-9a2d-32327a12e3c0",
+      "title": "本地 GPT-SoVITS 离线语音：aarch64 跑通记录与弃用决定（2026-11-02）",
+      "description": "本地 GPT-SoVITS 在手机 aarch64/proot 上跑通的依赖踩坑与 42 秒延迟实测；用户决定语音改走云端 API（脚本 shenjing/tools/tts.mjs + CosyVoice2），本地仅作断网备选。",
+      "status": "active",
+      "filename": "gpt-sovits-aarch64-2026-11-02-eb8e9984.md",
+      "relativePath": "documents/active/gpt-sovits-aarch64-2026-11-02-eb8e9984.md",
+      "sourcePaths": [
+        "shenjing/tools/tts.mjs"
+      ],
+      "sessionIds": [
+        "3e39025e-3b83-4a5f-a4a9-c7646a5a5c9f"
+      ],
+      "createdAt": "2026-11-02T06:27:30.640Z",
+      "updatedAt": "2026-11-02T06:27:30.640Z",
+      "lastAccessedAt": "2026-11-02T07:21:18.295Z",
+      "revision": 1,
+      "contentHash": "d3b19dba0f026c258dd5dd1d63066b932649c308e5ec01cd2f28ac508afa8f64",
+      "sizeBytes": 3518,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "59c87def-3672-4257-b3af-604c3367007f",
+      "title": "语音表现力控制与 xAI Grok TTS 备选评估（2026-11-02）",
+      "description": "CosyVoice2 的 speed 生效、instruct 未验证（附对照请求数据）；TTS 无法唱歌的原因；xAI Grok TTS 接口、语气标签与需单独 API key 的门槛；grok 插件未找到的待办。",
+      "status": "active",
+      "filename": "xai-grok-tts-2026-11-02-59c87def.md",
+      "relativePath": "documents/active/xai-grok-tts-2026-11-02-59c87def.md",
+      "sourcePaths": [
+        "shenjing/tools/tts.mjs"
+      ],
+      "sessionIds": [
+        "510c80ab-4b32-42e7-8c7d-3bc3aedfb397"
+      ],
+      "createdAt": "2026-11-02T07:21:34.283Z",
+      "updatedAt": "2026-11-02T07:21:34.283Z",
+      "lastAccessedAt": "2026-11-02T12:52:14.051Z",
+      "revision": 1,
+      "contentHash": "625348a78de0ec517d588357aa21d84ee34fa40bb1758a7d845b09521541e117",
+      "sizeBytes": 3456,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "f3e6d7a9-4df1-4b98-aa66-73c2d95d7db4",
+      "title": "语音朗读插件选型与 Edge TTS 403 修复（2026-11-02）",
+      "description": "dsh-voice-mode / dsh-xiaomi-tts / dsh-plugin-tts 三方案对比与推荐；dsh-plugin-xiaomi-mimo-tts 实为 dsh-xiaomi-tts；Edge TTS WSS 403 的成因与可用 msedge-tts 2.1.1 组合；两条试听音色。",
+      "status": "active",
+      "filename": "edge-tts-403-2026-11-02-f3e6d7a9.md",
+      "relativePath": "documents/active/edge-tts-403-2026-11-02-f3e6d7a9.md",
+      "sourcePaths": [],
+      "sessionIds": [
+        "d50ff9fc-61a6-47ce-bb1a-0a8b6cb9adf2"
+      ],
+      "createdAt": "2026-11-02T09:38:38.381Z",
+      "updatedAt": "2026-11-02T09:38:38.381Z",
+      "lastAccessedAt": "2026-11-02T14:46:38.485Z",
+      "revision": 1,
+      "contentHash": "5fb5537cb9a8cd46dddb7b6047b7ea47a2ed0b463a251743fbc0a2e6814015b5",
+      "sizeBytes": 3878,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "6a1c6a74-3833-461c-94eb-6332c4878dec",
+      "title": "dsh-xiaomi-tts 在 DSH Web 启用与 400 排错（2026-11-02）",
+      "description": "dsh-xiaomi-tts 装进 web profile 的实际启用条件（默认 disabled+无 key 等于没加载、改配置需重启、loader schema 不等于激活）；400「messages must contain an assistant role」根因在 requestMessages 的 user/assistant 分工；上游模型映射与流式限制；小米不能克隆、只剩 CosyVoice2 与豆包 seed-icl-2.0 两条克隆路。",
+      "status": "active",
+      "filename": "dsh-xiaomi-tts-dsh-web-400-2026-11-02-6a1c6a74.md",
+      "relativePath": "documents/active/dsh-xiaomi-tts-dsh-web-400-2026-11-02-6a1c6a74.md",
+      "sourcePaths": [],
+      "sessionIds": [
+        "a92c6174-3404-44f1-8843-2626c664f74f"
+      ],
+      "createdAt": "2026-11-02T12:52:30.024Z",
+      "updatedAt": "2026-11-02T12:52:30.024Z",
+      "lastAccessedAt": "2026-11-02T14:01:40.609Z",
+      "revision": 1,
+      "contentHash": "3749f172a94c91c7e0a632a5a296e8656f7367b9071e1e6e462ae17acc80cb9b",
+      "sizeBytes": 5077,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "0f8d15f7-6318-417e-9e71-b94d25df5005",
+      "title": "大肥鱼语音接入：BreezeBlue TTS 接口与豆包 V1 协议实测（2026-11-02）",
+      "description": "BreezeBlue 合成端点/参数/官方音色 ID 与开发者页路径、401/422 判活与鉴权陷阱；DSH 豆包 BidirectionalTTS 事件码、V1 帧编码（sessionId 长度必写否则 45000000）、PCM 奇数字节对齐、错误分类与音频头校验。",
+      "status": "active",
+      "filename": "breezeblue-tts-v1-2026-11-02-0f8d15f7.md",
+      "relativePath": "documents/active/breezeblue-tts-v1-2026-11-02-0f8d15f7.md",
+      "sourcePaths": [
+        "shenjing/tools/breeze-tts.mjs"
+      ],
+      "sessionIds": [
+        "49eb0feb-db0b-468c-bc7e-508c06c16acb"
+      ],
+      "createdAt": "2026-11-02T14:02:00.828Z",
+      "updatedAt": "2026-11-02T14:02:00.828Z",
+      "lastAccessedAt": "2026-11-02T14:46:38.485Z",
+      "revision": 1,
+      "contentHash": "486593ddb2af89972168c56ca421545e7548eef5e7ff1082c6f764abf177cd80",
+      "sizeBytes": 6080,
+      "memoryBodyIds": []
+    },
+    {
+      "id": "55e264a7-307e-4ff9-9697-45079860ade8",
+      "title": "QQ Bot 扩展工具索引刷新与 per-agent 注册机制（2026-11-03）",
+      "description": "expose:'all' 扩展工具写完却查不到/领不到的根因：ext-tools-index.json 只靠 QQ 入站消息或启动 60 秒重试刷新；注册必须 per-agent；扫描→剪枝→注册顺序；ctx.get('tools')；reloadAllChannelTools 热刷新范围与诊断日志开关。",
+      "status": "active",
+      "filename": "qq-bot-per-agent-2026-11-03-55e264a7.md",
+      "relativePath": "documents/active/qq-bot-per-agent-2026-11-03-55e264a7.md",
+      "sourcePaths": [
+        ".dsh/profiles/web/node_modules/@zaofan/dsh-qqbot/dist/session/session-manager.js",
+        ".dsh/profiles/web/node_modules/@zaofan/dsh-qqbot/dist/transport/inbound.js",
+        ".dsh/profiles/web/node_modules/@zaofan/dsh-qqbot/dist/gateway/middleware-setup.js",
+        ".dsh/profiles/web/node_modules/@zaofan/dsh-qqbot/dist/features/ext-inbound.js",
+        ".dsh/profiles/web/node_modules/@zaofan/dsh-qqbot/dist/channel-tools.js",
+        "dshqqbot/.qqbot/ext-tools-index.json"
+      ],
+      "sessionIds": [
+        "973aeade-a9d5-4d95-97fb-0481f03ce318"
+      ],
+      "createdAt": "2026-11-02T16:44:47.819Z",
+      "updatedAt": "2026-11-02T16:44:47.819Z",
+      "lastAccessedAt": "2026-11-02T16:44:47.819Z",
+      "revision": 1,
+      "contentHash": "fbc04539198328ff7700db68be2b292ccd37923ae226aab5e31e0197238e8f99",
+      "sizeBytes": 5186,
       "memoryBodyIds": []
     }
   ]

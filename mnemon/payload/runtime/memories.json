@@ -132,6 +132,18 @@
         "label": "localhost",
         "at": "2026-10-25T02:17:15.676Z"
       }
+    },
+    {
+      "content": "语音：默认音色定为 Breeze Blue 的 voc_nkz9sbve27ar（周宇 2026-11-02 拍板）。合成脚本 /root/Documents/deepseek-harness/default-workspace/shenjing/tools/breeze-tts.mjs，默认音色存 /root/.dsh/breeze-voice.txt，key 在 /root/.dsh/breeze-key.txt（600）。端点 POST https://api.breeze.blue/v1/text-to-speech/{voiceId}?outputFormat=mp3，头 xi-api-key，body 只准 {text}（带 modelId 会 422 extra_forbidden）。dsh-xiaomi-tts 插件只支持 provider xiaomi/doubao（TTS_PROVIDERS），接 Breeze 得改插件或走 send_media。",
+      "target": "memory",
+      "importance": "normal",
+      "created_at": "2026-11-02T15:03:04.097Z",
+      "updated_at": "2026-11-02T15:03:04.097Z",
+      "origin": {
+        "machine": "203b9c6d-aaa1-4db0-b33d-2e26d928ebb6",
+        "label": "localhost",
+        "at": "2026-11-02T15:03:04.097Z"
+      }
     }
   ]
 }

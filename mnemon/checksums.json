@@ -1,16 +1,31 @@
 {
   "algorithm": "sha256",
   "files": {
-    "payload/runtime/memories.json": "e5dcd0a80f079c1bc65e3a3b1f2577f466b16755e8fd777c5962d6044a3cece2",
+    "payload/runtime/memories.json": "a501996ce0b5140dda9a8e4c1e9dc1e1ca9a8c1c94de80a7bd1f984e8d96e8b3",
     "payload/runtime/USER.md": "9fafc3b63bc72eaf9d512ea9dbdb34758db84227d2ce747c74af54dd61dcf701",
-    "payload/runtime/MEMORY.md": "ccb307cc7c8226885728c367ed4ed076a8f49d0a872681409ee4435c528b56c6",
-    "payload/documents/index.json": "5a4f5c7bd8e4f4931bb2066b10384f007389891172d8dae8b41874942db50c21",
+    "payload/runtime/MEMORY.md": "867acb26ac6d1c5aa843ab115ad1148b4efd34a84b4bd0c06c2d91ec5935fc77",
+    "payload/documents/index.json": "391c1e933f82ec318273fe9a6cf0ff940f6ec3e56bc5c33034e2629305a233ad",
     "payload/documents/active/document-f08e1253.md": "3890048cf979baabffb8aa33482c384da5a2fad3f8110e95fb7289a37a246934",
     "payload/documents/active/shenjing-preset-agent-f020768f.md": "d540fe75dd5a85bb9fbb7b1681f4b218a468af9bc0fa395edf4f5d3c766988bf",
     "payload/documents/active/dsh-bili-scroll-aarch64-uv-f4e00ab9.md": "11c0677fe12f8c8bc370f779deead3d15f6ee314ffc5c8f960e790cf32652d89",
     "payload/documents/active/b-dsh-bili-scroll-asr-d9e89150.md": "88c352fac66bd61e19eb063764c8e410e632d2c79440a40c070459c837e01a7e",
     "payload/documents/active/dsh-web-dsh-plugin-tts-c51d380c.md": "04ccd8eee93b62faff13bd2316876ac7f88da5998c1442402e5bdedf7c4cf5a4",
     "payload/documents/active/gpt-sovits-v2-2026-10-25-daa0aa17.md": "b254a6da11d917ba0db9270772f1401cc6df5bb2bbe96d43bb56146341d42ec2",
-    "payload/data/.dsh-memory-bodies.json": "dc6020b75bab2ed6109193aea9c3427c22d9d2b6edd223c4c8c6cd87ad0c67dd"
+    "payload/documents/active/dsh-go-fc658c95.md": "4b221355fae9ac8a8b6d4d39d112682a4a1767ef789b544d2426032eafe2470b",
+    "payload/documents/active/document-2a742664.md": "392f9382534bfb55bb9116d17ac43e5c720a9f14e93cbd4733af0b17508f2e5a",
+    "payload/documents/active/shenjing-brain-593e08c7.md": "1619d6b9a2ffb763d09ac6ff759cc5a6a9f4aa91105b6fafaa15170a746c9798",
+    "payload/documents/active/shenjing-brain-siliconflow-content-7c1a8550.md": "a98a64f3f77d10ae27eb76d9a8c0e06ea13ea75ea115fc90319c51dff38d2dc9",
+    "payload/documents/active/mnemon-cli-mnemon-native-dsh-mnemon-0-5-37-493dab3d.md": "8c276fcc7ed5af0c9545b754ad9c85555dcce425eadc5a09f51abe27444aa188",
+    "payload/documents/active/shenjing-life-exit-7-b6ac6c62.md": "2ebe99e17321a4ca08d171287827e820fa080bca50a7044dc9142cde84e840b0",
+    "payload/documents/active/qq-siliconflow-tts-2026-11-02-a3dadfaf.md": "69471d4004730a7686c856b84857f373c9c9668c1acb02fa82c57ff3a0fb6807",
+    "payload/documents/active/gpt-sovits-aarch64-2026-11-02-eb8e9984.md": "4853594bd15296ba943c3173900313ade0e3d8c080e4f2657980e79fcc37ddd3",
+    "payload/documents/active/xai-grok-tts-2026-11-02-59c87def.md": "2d0f10a2c7c01b033e2d284c791b731fd947e8c38198b5e9d784d7168f62e4f9",
+    "payload/documents/active/edge-tts-403-2026-11-02-f3e6d7a9.md": "3f1096d0551b0a5916455242d45bd323ff06d0cd4dbcde1e095c68ed772cf964",
+    "payload/documents/active/dsh-xiaomi-tts-dsh-web-400-2026-11-02-6a1c6a74.md": "773ebd0c7d68e8827f913b612840d9e2211284d8289574a072f2750ffda75d27",
+    "payload/documents/active/breezeblue-tts-v1-2026-11-02-0f8d15f7.md": "28d664beba53701b090d95eca0177108b3b4c87e530a6a489a487b7622d0676d",
+    "payload/documents/active/qq-bot-per-agent-2026-11-03-55e264a7.md": "f96000aa0803256a19c3249a2f4378f4afccd2a13f1c4216b175b7a1c74a60b5",
+    "payload/data/.dsh-memory-bodies.json": "ec4f56db0c880f372595b5989e878f027010de2bf6cebb6c6f472c94c52961df",
+    "payload/data/aa485e22-d947-4812-a27b-5740e64c3a2c/mnemon.db": "c2dfe55d5acbbb36822f30cb07c140e6becc8f4379d1ede5b1ea148834a06be4",
+    "payload/data/default/mnemon.db": "6d2bf3ceb4aba5ab6ae7786a706b33321949fc208cbcb85199e0ace6e16b91d9"
   }
 }

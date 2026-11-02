@@ -11,3 +11,5 @@ persona-life 插件（@local/persona-life）：源码 default-workspace/persona-
 朗读插件 dsh-read-aloud-neural：默认音色已改成 zh-CN-XiaoyiNeural（晓伊），但音色选择存在浏览器 localStorage，改服务端只影响默认值；要换得在 设置→通用→声音 里选。插件的 json 响应头都加了 no-transform，否则被 DSH 的 gzip 压坏（空响应）。
 §
 刷B站插件已升到 2.0.2（0.1.7 的开关"点了又自己关掉"是已知 bug，作者在 2.x 修了）。B站账号已转正，可以评论和私信。
+§
+语音：默认音色定为 Breeze Blue 的 voc_nkz9sbve27ar（周宇 2026-11-02 拍板）。合成脚本 /root/Documents/deepseek-harness/default-workspace/shenjing/tools/breeze-tts.mjs，默认音色存 /root/.dsh/breeze-voice.txt，key 在 /root/.dsh/breeze-key.txt（600）。端点 POST https://api.breeze.blue/v1/text-to-speech/{voiceId}?outputFormat=mp3，头 xi-api-key，body 只准 {text}（带 modelId 会 422 extra_forbidden）。dsh-xiaomi-tts 插件只支持 provider xiaomi/doubao（TTS_PROVIDERS），接 Breeze 得改插件或走 send_media。
