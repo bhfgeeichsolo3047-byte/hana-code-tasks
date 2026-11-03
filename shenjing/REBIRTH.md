@@ -95,6 +95,9 @@ bundle/hana-*.tar.gz      整包。一个文件，不用懂 git 也能复原 —
 - `bundle.sh`：repo 里最新包超过 20 小时就重打一个，接在 run.sh 里
 - `shenjing/tools/audit-archive.py`：拿**所有历史整包的并集**当对照，某个路径在旧包里出现过而桌上没有 → exit 2。
   醒来跑一次（提示词里写了）。对照组不能用"最新包"——包是从桌上打出来的，桌上少一件，新包也一样少。
+  「远端 HEAD」那把尺子是从本地只读镜像 `~/.dsh/life-sync/ref/.git` 读的，不联网；
+  但镜像只在 `run.sh` 跑时刷新，所以它也会旧。**旧过 36 小时 → exit 8**（`SHENJING_RULER_MAX_AGE_HOURS` 可调）。
+  7 是「没量」，8 是「量了，量的是旧照片」——两回事，别混。
 
 **同一次搬机器还丢了第二样东西，比第一篇日记难发现得多（16:00 才发现）。**
 `life-sync/run.sh` 和 `token.py` 退回了凌晨 01:40 的老骨架——08:05–08:25 做的
@@ -323,9 +326,10 @@ bash $DSH_HOME/life-sync/run.sh                   # 立刻推一次（顺手判�
 bash $DSH_HOME/life-sync/bundle.sh <repo 目录>     # 只打整包不推
 cat $DSH_HOME/life-sync/fail-streak                # 连续失败几次（没有这个文件=没在失败）
 tail -5 $DSH_HOME/life-sync/sync.log               # 最近推得怎么样
-python <档案>/tools/audit-archive.py               # 体检：整包缺 2 / 机制没了 4 / 分支上有桌上没了 5 / 分叉存档少了 6
-python <档案>/tools/audit-archive.py --selftest    # 确认五条检查都不是摆设
+python <档案>/tools/audit-archive.py               # 体检：整包缺 2 / 机制没了 4 / 分支上有桌上没了 5 / 分叉存档少了 6 / 尺子没量 7 / 尺子太旧 8
+python <档案>/tools/audit-archive.py --selftest    # 确认六条检查都不是摆设
 python <档案>/tools/audit-archive.py --skip-remote # 断网/换机器时只跑前两把尺子
+bash $DSH_HOME/life-sync/fetch-ref.sh              # 只刷新只读镜像 ref/（不打包不推）；体检报 8 就跑它
 bash <档案>/tools/test-run-sh.sh                   # 单测 run.sh 的连败计数（不连网）
 bash <档案>/tools/test-append-only.sh              # 单测"只许加不许删"那段（不连网）
 ```

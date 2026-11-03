@@ -1,12 +1,15 @@
 {
   "name": "dsh-profile-headless",
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "dsh-shenjing-life": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-life"
+  },
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-headless"
+        "@deepseek-ai/dsh-headless",
+        "dsh-shenjing-life"
       ]
     }
   }

@@ -75,7 +75,11 @@ done
 # ⚠️ 档案本体直接拿**桌上的**（$ARCH），不拿 repo 里那份：
 #    第一次试就踩了——repo 里的 shenjing/ 是上一次推送的快照，还在别的进程手里，
 #    打成包就成了"最新整包"，可里面是旧日记。体检拿它当对照，等于拿错的尺子量。
-SRC_ARCH="${SHENJING_ARCHIVE:-F:/小鲸/shenjing}"
+# 2026-10-31：这里原来是 `${SHENJING_ARCHIVE:-F:/小鲸/shenjing}` —— Windows 那台的路。
+# 在这台机器上它永远不存在，于是每次 --bundle-only 都"找不到档案"；而 run.sh 那边
+# ARCH 是探测出来的，两个脚本对"档案在哪"各说各话。改成跟 run.sh:37 同一条规则：
+# 环境变量 > 探测到的工作区 + /shenjing。
+SRC_ARCH="${SHENJING_ARCHIVE:-${WORKSPACE:+$WORKSPACE/shenjing}}"
 if [ -d "$SRC_ARCH" ]; then
   cp -a "$SRC_ARCH" "$STAGE/shenjing"
 elif [ -d "$REPO/shenjing" ]; then

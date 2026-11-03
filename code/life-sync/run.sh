@@ -111,6 +111,41 @@ if [ -z "${TOKEN:-}" ]; then
   mark_fail
   exit 1
 fi
+# ── 可见性闸已撤（2026-11-03）──────────────────────────────────────────────────
+# 2026-10-31 在这里加过一道 fail-closed 闸：仓库不是 private 就只打包不推。
+# 2026-11-03 周宇说「把校验去掉吧，直接公开仓库推送就行」——他本人决定接受公开。
+# 撤闸前把要推的内容扫了一遍：profiles 里 desktop/headless 的 cordis.patch.yml 无明文 key；
+# shenjing/ 下唯一命中的是 tools/breeze-tts.mjs:11 的 xi-api-key: apiKey（变量名，值从
+# /root/.dsh/breeze-key.txt 读，不进仓库）。所以这次撤闸不额外带出密钥。
+# REPO_VIS 只做记录（写进 sync.log），不再决定推不推。
+REPO_VIS=""
+for _try in 1 2 3; do
+  REPO_VIS=$("$PY" - "$TOKEN" "$OWNER_REPO" <<'PYEOF_VIS' 2>>"$LOG"
+import json, sys, urllib.request
+tok, owner_repo = sys.argv[1], sys.argv[2]
+try:
+    req = urllib.request.Request('https://api.github.com/repos/' + owner_repo,
+        headers={'Authorization': 'token ' + tok, 'Accept': 'application/vnd.github+json'})
+    d = json.load(urllib.request.urlopen(req, timeout=25))
+    print('private' if d.get('private') else 'public')
+except Exception as e:
+    print('unknown:' + type(e).__name__)
+PYEOF_VIS
+)
+  case "${REPO_VIS:-}" in private|public) break;; esac
+  [ "$_try" -lt 3 ] && sleep $((_try * 5))
+done
+say "仓库可见性=${REPO_VIS:-unknown}，照常推送（校验已于 2026-11-03 撤除）"
+# 只读镜像 ref/ 仍然维护：体检那把「远端 HEAD」尺子从 ref/.git 读
+if [ -d "$HERE/ref/.git" ]; then
+  git -C "$HERE/ref" fetch -q --depth 1 origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>>"$LOG" \
+    || say "只读镜像 fetch 失败（体检那把尺子会偏旧）"
+else
+  git clone -q --depth 1 --branch "$BRANCH" --single-branch \
+    "https://github.com/${OWNER_REPO}.git" "$HERE/ref" 2>>"$LOG" \
+    || say "只读镜像没建起来（体检会报 exit 7：尺子没量）"
+fi
+
 AUTH="https://x-access-token:${TOKEN}@github.com/${OWNER_REPO}.git"
 
 # ⭐ 2026-10-26 本机的坑：github.com:443 直连不通（curl 000 / Connection reset），

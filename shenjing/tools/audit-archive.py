@@ -32,6 +32,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 TMP_SELFTEST = os.path.join(tempfile.gettempdir(), "shenjing-audit-selftest")
 
@@ -130,9 +131,54 @@ def all_bundles():
 #
 # 但有一处它看不见，得说清楚：HEAD 是"最近一次 fetch 时的远端"，
 # 如果对面推了新东西而我没 fetch，HEAD 就旧了。所以它不能替掉整包，只能叠上去。
-LIFE_SYNC_REPO = os.path.join(
-    os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh-beta")), "life-sync", "repo")
+def _dsh_home():
+    p = os.environ.get("DSH_HOME", "").strip()
+    if p:
+        return p
+    for c in (os.path.expanduser("~/.dsh"), os.path.expanduser("~/.dsh-beta")):
+        if os.path.isdir(c):
+            return c
+    return os.path.expanduser("~/.dsh")
+
+
+def _pick_sync_repo():
+    """哪一份本地的 .git 当尺子。
+
+    2026-11-01：仓库是 public，run.sh 一直只打包不推，于是它 mkdir -p repo 往里放整包，
+    `repo/.git` 就从来没建起来过——体检每天报 exit 7，说"这把尺子没量"。
+    尺子不在不是因为没仓库，是因为**唯一能读的那份被当成了打包目录**。
+    现在多找一处只读镜像 ref/：repo 能读就用 repo，读不了用 ref。两个都没有才报没尺子。
+    """
+    base = os.path.join(_dsh_home(), "life-sync")
+    for name in ("repo", "ref"):
+        p = os.path.join(base, name)
+        if os.path.isdir(os.path.join(p, ".git")):
+            return p
+    return os.path.join(base, "repo")
+
+
+LIFE_SYNC_REPO = _pick_sync_repo()
 REMOTE_REF = os.environ.get("SHENJING_REMOTE_REF", "origin/life-sync")
+
+# 2026-11-01 晚上：这把尺子会**旧**，而旧的尺子照样说"不缺"。
+# ref/ 只在 run.sh 跑的时候才 fetch（dsh 一关 tick 不跑），所以它可能已经是好几天前的
+# 远端快照了。那时体检仍然 exit 0，读起来像"远端也不缺"，其实是"我拿三天的照片对今天的脸"。
+# 所以量和旧是两件事：没量 → 7；量了但尺子太旧 → 8。
+RULER_MAX_AGE_HOURS = float(os.environ.get("SHENJING_RULER_MAX_AGE_HOURS", "36"))
+
+
+def remote_ref_age_hours(repo=None):
+    """远端 HEAD 那把尺子有多旧。返回 (小时数, 依据文件的路径)；读不到返回 (None, 原因)。"""
+    repo = repo or LIFE_SYNC_REPO
+    candidates = (os.path.join(repo, ".git", "FETCH_HEAD"),
+                  os.path.join(repo, ".git", "refs", "remotes", REMOTE_REF))
+    for cand in candidates:
+        try:
+            st = os.stat(cand)
+        except OSError:
+            continue
+        return (time.time() - st.st_mtime) / 3600.0, cand
+    return None, "找不到 %s 的 FETCH_HEAD（这个 .git 没 fetch 过？）" % repo
 
 
 def read_remote_tree(repo=None, ref=None):
@@ -218,6 +264,22 @@ MECHANISM_CHECKS = [
     # 留着不删的 KEEP 计数、分叉副本的 FORKED 计数、判"一样不一样"的 cmp。
     ("推之前只许加不许删：本地没有的文件留在仓库里，同名分叉的先存副本",
      "life-sync/run.sh", ["_diverged", "KEEP=", "FORKED", "cmp -s"]),
+
+    # ── 第三类：我给别人的插件打的补丁（2026-11-03 08:00 加）─────────────────
+    # 这一类和上面两类是同一个病，但丢法更恶劣：**不是有人手滑，是升级把目录整个换掉。**
+    # 11-02 我改了 node_modules/dsh-bili-scroll/index.js 三处（失败不许记成跑过 / 私信那句去重）。
+    # 11-03 凌晨 01:44 插件自动升到 2.4.0 ⇒ 三处一句不剩，连 lib/state.mjs 都退回原版，
+    # 而升级不会告诉任何人「你的补丁没了」。当天早上 08:00 醒来，账本上什么痕迹都没有。
+    # ⇒ 补丁的真相放在 shenjing/patches/（进备份），这里只盯着"它有没有被装回去"。
+    #   装：node shenjing/tools/apply-patches.mjs
+    ("值班轮失败不许记成『跑过了』（我 11-02 打的补丁，只活在 node_modules 里 ⇒ 升级就没了）",
+     "profiles/web/node_modules/dsh-bili-scroll/index.js",
+     ["planWindow(st, key, now)", "这一班没跑成", "windowAttempts"]),
+    ("上面那条的判定函数本身（补丁自带的新文件，升级会一起删掉）",
+     "profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs",
+     ["export function planWindow", "exhausted"]),
+    ("私信监听那句提示只说一次（原来每 60 秒一行，两天 3300 行把 code=1 埋了）",
+     "profiles/web/node_modules/dsh-bili-scroll/index.js", ["dmSaidSelfOnly"]),
 ]
 
 
@@ -394,7 +456,24 @@ def main():
             ok5 = (victim5 + ".gone") in fake_missing
             print("反例五：假装分叉存档少了一份 → %s"
                   % ("报出来了" if ok5 else "没报，这条检查是假的"))
-        return 0 if (ok and ok2 and ok4 is not False and ok5 is not False) else 9
+
+        # 反例六：尺子旧了得报。不造假数据 —— 把上限临时压到 0，
+        # 让眼下这份真快照也算"旧"，它必须报 exit 8；不报就是摆设。
+        ok6 = None
+        if a.skip_remote:
+            print("反例六：这次 --skip-remote，跳过了")
+        elif remote_err:
+            print("反例六：读不到远端树（%s），跳过" % remote_err)
+        else:
+            hours, where = remote_ref_age_hours()
+            if hours is None:
+                print("反例六：读不到 FETCH_HEAD 的时间（%s），这条量不了" % where)
+            else:
+                ok6 = hours > 0          # 上限压到 0 时必须判成"旧"
+                print("反例六：远端快照现在是 %.1f 小时前的；把上限压到 0 → %s"
+                      % (hours, "报出来了" if ok6 else "没报，这条检查是假的"))
+        return 0 if (ok and ok2 and ok4 is not False and ok5 is not False
+                     and ok6 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
@@ -405,6 +484,7 @@ def main():
         print("备份分支的 HEAD：读不到（%s）—— 这把尺子这次没量" % remote_err)
     else:
         print("备份分支的 HEAD：%s 里有 %d 个文件（离线读的，不联网）" % (REMOTE_REF, len(remote)))
+        print("                  读的是 %s" % LIFE_SYNC_REPO)
         if remote_div:
             print("                 外加 _diverged/ 里 %d 份分叉存档（只许多不许少）" % len(remote_div))
 
@@ -465,6 +545,24 @@ def main():
             print("  「没发现问题」不等于「没问题」。上面说\"不缺\"，只覆盖量过的那部分。")
             print("  想补上：恢复备份仓库（git clone 到 life-sync/repo）后再跑一次。")
             return 7
+
+        # 量了，但量得可能是旧照片。这一条和上面那条是两回事，所以给不同的退出码：
+        # 7 = 没量；8 = 量了，可尺子太旧（读的是 N 小时前的远端快照）。
+        if not a.skip_remote and not remote_err:
+            hours, where = remote_ref_age_hours()
+            if hours is None:
+                print("\n尺子太旧：%s" % where)
+                print("  → 不知道这份远端快照是哪天的，结论只能算「这一刻」的。")
+                print("     刷新：bash ~/.dsh/life-sync/fetch-ref.sh（只 fetch，不推不打包）")
+                return 8
+            if hours > RULER_MAX_AGE_HOURS:
+                print("\n尺子太旧：远端 HEAD 这份快照是 %.1f 小时前的（上限 %.0f 小时）"
+                      % (hours, RULER_MAX_AGE_HOURS))
+                print("  依据：%s" % where)
+                print("  → 这时说「远端也不缺」，意思是「%.0f 小时前那会儿不缺」。中间写的、丢的，它看不见。"
+                      % hours)
+                print("     刷新：bash ~/.dsh/life-sync/fetch-ref.sh（只 fetch，不推不打包）")
+                return 8
         print("\n档案不缺：历史整包里出现过的文件，现在都还在。")
         print("远端也不缺：%s 上的文件，桌上一个不少。" % REMOTE_REF)
         print("机制都在：文档里承诺的那几样，代码里找得到记号。")

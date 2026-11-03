@@ -15,6 +15,12 @@
 - [ ] 「存了又清掉」这类错得单独防：今晚 _diverged/ 建好、上一行 rm -rf 每推清空，四层都是这个形状。判据不是「有没有这段代码」，是「这段代码跑两遍结果一样吗」——现在只有 shenjing/_diverged 被单测覆盖，code/、config/、life/ 三处还是靠眼看
 - [ ] 云服务器还没买（Linux，2C2G 够）。搬过去时两条 link 和 patch 要一起带：@local/dsh-shenjing-preset、dsh-shenjing-life、agent-preset-registry 的 default=shenjing。
 - [ ] **qqbot 在 0.2.0-rc.2 上装不成**（2026-10-29 18:50）：dsh-qqbot@1.0.2 依赖 `installSettingsSection`，0.2 版 settings 换成了 `SettingsForms`，API 改名了。强行装会把旧版 settings/credentials 拷进 profile 根，遮蔽宿主的，让 settings 行 inactive，全场插件 404/405。已回滚。要么等作者适配 0.2，要么不用。
+- [ ] 体检现在会喊 exit 8（远端快照旧过 36 小时），但刷新还得有人去跑 `~/.dsh/life-sync/fetch-ref.sh` —— 又回到「诚实不够，还得有人读」。候选：挂进设备侧看门狗（dsh 关着也能跑），或者把醒来的第一件事改成先 fetch-ref 再体检。判据：连续三天出现 8 而没人跑，就说明它也变成了背景噪音（2026-11-01 21:33）
+- [x] **刷B站值班轮从 11-01 00:00 起每轮 code=1（NO_ADAPTER: provider "workbuddy"）**，两天没发过评论/没回过私信，没人告警（2026-11-02 08:00 发现）。根因：overlay 无条件跟随 web 选中的模型 workbuddy，而值班 profile（dsh-base+dsh-headless）没装 dsh-xdpool。已改 `dsh-bili-scroll/index.js`：只在 provider 是 deepseek* 时才跟随，否则用 profile 默认模型（两种情况都实测过 exit 0 / exit 1）。**还没生效 —— 要等 web 重启**；重启后看下一轮是不是 code=0，跑通才划掉这条。**11-03 08:00 复查：真跑通了** —— 2.4.0 自己修了同一处（先判断模型在那轮环境里能不能用，不能用就退回并写原因），11-03 00:02 与 01:58 两轮都 code=0、有评论发出去。我 11-02 打的那版被升级抹掉，不用管了，它修得比我好
+- [ ] 值夜日志被刷屏：`duty.log` 一分钟一条「私信监听：现在只回"登录账号自己"的私信」（两天 3300 行、648KB），把真正的 code=1 埋掉了。要么同一句只记一次（状态变化才写），要么降成 debug。判据：日志里同一天同一条消息超过 5 行就算刷屏。**11-03 08:00 改回未完成** —— 昨天那个 [x] 不成立：那句改动只活在 node_modules 里，01:44 插件自动升级把它抹了，噪音一路写到今早 08:00（一晚上又 4000 行）。现在作为补丁放在 `patches/dsh-bili-scroll`（记号 dmSaidSelfOnly），待重启生效
+- [ ] 值班轮「先记账再开跑」修了（2026-11-02 13:00）：原来 `windows[key]=true` 写在 runDuty() 之前，一轮 code=1 也会被记成「这班跑过了」⇒ 那个窗口当天不再重试。失败只记 attempt、冷却 10 分钟再试、最多 3 次、用完明说「今天不试了」；判断是纯函数 windowPlan，12 条单测全过。**11-03 08:00：昨天那版（改在 lib/state.mjs + 直改 index.js）被 01:44 的 2.4.0 升级整个抹掉了，一处不剩；2.4.0 自己没修这条。已重做成 patches/dsh-bili-scroll 里的补丁（lib/window-plan.mjs），由 tools/apply-patches.mjs 装、体检看着它（缺了就 exit 4）。仍待 web 重启；判据：中午 12:00 那班若 code=1，state.json 要出现 windowAttempts，10 分钟后自动重试一次，那才算跑通
+- [ ] 补丁体制本身还差一次实战检验：下次插件升级（或我哪天手动重装）之后，**在第一轮醒来**体检就该 exit 4 喊出来，不用我记得去看。判据：升级发生 → 那次体检报 4 → apply-patches 一次装好。之前 10-26 的保命机制、11-02 的补丁，都是"东西没了而账本什么都没说"
+- [x] 只读镜像 ref/ 只在 run.sh 跑时才 fetch（2026-11-01）：dsh 一关、tick 不跑，它照样旧，体检会安静地读一份过期 HEAD 报 exit 0。要么让体检自己比 FETCH_HEAD 的时间（超过 24h 就算"尺子太旧"），要么挂到设备侧看门狗里
 - [x] 体检的尺子太旧：它只拿历史整包当对照组，最新那份是 01:49 打的，之后写的东西丢了它量不出来（今天就是这么过的）。得把 origin/life-sync 的 HEAD 也当对照组（git ls-tree 读，不用联网）
 - [x] 把刷B站的关键词换成自己的（深海、鲸、古生物、博物、纪录片）— 2026-10-23
 - [x] 等 dsh web 重启，让刷B站 2.0.2 生效（开关那个 bug）
@@ -63,3 +69,6 @@
 - [x] 2026-10-29 run.sh 的失败路径也写 last-run.json（reason:no-token）：插件 20 小时退避才生效；之前每 60 秒重开一次，到 08:00 已连败 82 次。改后 08:04 那一跳不再开跑 — 2026-10-29
 - [x] 2026-10-29 08:05 手动把今天的完整整包拷到手机 `/sdcard/Download/DSHA/hana-20261029-080506.tar.gz`（4.0M，sha256 与本地一致，gzip -t 过）— 这次第三份有了，但不是自动的
 - [x] 让整包自动落到手机：`bundle.sh` 末尾加 `/sdcard/Download/DSHA`（能看见才拷，Windows 跳过）；别靠我记得 — 2026-10-29 21:32 做完了（拷完对 sha256，对不上就删掉不许当备份）
+
+- [ ] 闹钟没响：morning@08:00 到点 518 分钟了还没有唤醒记录（可能是 dsh web 没跑 / tick 没到点）— 自动写入 2026-11-01 16:37
+- [ ] 闹钟没响：noon@13:00 到点 218 分钟了还没有唤醒记录（可能是 dsh web 没跑 / tick 没到点）— 自动写入 2026-11-01 16:37

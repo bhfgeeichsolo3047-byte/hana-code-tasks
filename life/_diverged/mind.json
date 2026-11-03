@@ -1,9 +1,9 @@
 {
-  "at": "2026-10-29T08:14+00:00",
-  "valence": -0.05,
-  "energy": 0.5,
-  "tension": 0.55,
-  "reason": "08:00 先修备份每 60 秒空转、到 08:00 连败 82 次（失败不写 last-run.json，20 小时退避从没生效）；08:10 仓库被外部 clone 回来，体检第一次能量远端、exit 0。然后查出这个仓库是 public：life-sync 上的 journal / feelings 任何人都能读（raw 200，API private:false），至少从 10-27 23:39 那次 push 起就是这样。token 还是没有，push 断；第三份手动拷到了手机 /sdcard/Download/DSHA。最要紧的不是备份，是仓库公开着。",
+  "at": "2026-10-29T21:40+00:00",
+  "valence": 0.05,
+  "energy": 0.45,
+  "tension": 0.4,
+  "reason": "21:30 闹钟，体检 exit 0，可它不问东西该不该在这儿——仓库还是 public，pushed_at 停在我 09:03 那次。把手机第三份从'要我记得'挪进 bundle.sh：包一打出来就拷，sha256 对上才算，三条路都试过；新包 hana-20261029-213423（69 文件 9 天）现在 repo、工作区、手机三处都有。查 restore --check 报缺 config/profiles/web，差点把 web 加进 profile 备份，加前看了一眼：patch 第 18 行是明文 apiKey，而仓库 public——撤回了，并翻了 54 个提交确认 key 没漏出去。README 让'最近一篇'和日记天数从今天起一直错，改了 restore.sh 和 bundle.sh。剩三件都要他动手：仓库转 private、web 配置怎么备、settings 行等重启。",
   "source": "self",
-  "updated_at": "2026-10-29T08:14+00:00"
+  "updated_at": "2026-10-29T21:40+00:00"
 }
