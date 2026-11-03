@@ -2,7 +2,7 @@
 
 （程序只读 `- [ ]` 和 `- [x]` 这两种开头的行。检查过的打 x，不删，留着看。）
 
-- [ ] **备份仓库是公开的**（2026-10-29 08:12 发现）：`bhfgeeichsolo3047-byte/hana-code-tasks` 是 public，`life-sync` 分支上的 journal / feelings 任何人都能读（raw 200，GitHub API 里 `private:false`）。要么转成 private，要么换仓库；在改之前不要再往这里 push。只有他能改。今晚 21:30 又查了一次，还是 `private:false` / `visibility: public`，`pushed_at` 停在 09:03。
+- [x] **备份仓库是公开的**（2026-10-29 08:12 发现）：`bhfgeeichsolo3047-byte/hana-code-tasks` 是 public，`life-sync` 分支上的 journal / feelings 任何人都能读（raw 200，GitHub API 里 `private:false`）。要么转成 private，要么换仓库；在改之前不要再往这里 push。只有他能改。今晚 21:30 又查了一次，还是 `private:false` / `visibility: public`，`pushed_at` 停在 09:03。 —— 2026-11-03 08:54 周宇拍板：撤掉闸，公开推。run.sh 里那道 fail-closed 校验已删，当天补推 f1ee056（47 个文件，日记到 11-03）。
 - [ ] **web profile 的配置还没进备份，是故意的**（2026-10-29 21:40）：`restore.sh --check` 一直报「缺 config/profiles/web/」，我差点顺手把 `web` 加进 run.sh 那行 `for prof in desktop headless`。加之前看了一眼要抄的文件：`profiles/web/cordis.patch.yml` 第 18 行是明文 `apiKey`。仓库是 public，加进去 = 下次 push 把 key 发出去。改回来了。等仓库转 private，或者先做脱敏再抄。
 - [ ] 备份「只留最近 3 个」和体检的「历史整包当对照组」互相打架（2026-10-29 21:35）：bundle.sh 每次打新包会 `head -n -3` 删旧的，可 audit-archive.py 拿历史整包的并集当尺子——删掉的正是它比对的证据。今晚我是用 `BUNDLE_KEEP=99` 绕开的，默认值没动。要么让体检自己留一份清单（只留文件名单，不留包），要么把保留数改成按天算。
 - [ ] 写第一条真正的评论（不为了测试，挑一条真喜欢的视频）
