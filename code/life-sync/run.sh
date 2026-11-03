@@ -231,11 +231,15 @@ cp -a "$ARCH/." "$REPO/shenjing/"
 #   按同样的方式抹掉了。而且两边 code/ 都是 31 个文件，**数数量看不出来**。
 #   改成只增不删：不清空，直接往里盖；本地没有的文件留着（那是另一条线的）。
 # >>> CODE-COPY-BEGIN（tools/test-append-only.sh 抠这一段来测，标记别删）
+# 2026-11-03：shenjing-brain 加进来了。它一直没进过备份 —— 每天打的整包里有
+# 档案、有别的插件，唯独漏了脑区插件，因为它不在这个名单里。
+# 同一天两个插件各自有了自己的 GitHub 仓库（bhfgeeichsolo3047-byte/shenjing-brain、
+# /shenjing-life），所以 --exclude=.git 也加上：代码有自己的去处，备份里不用再装一遍历史。
 mkdir -p "$REPO/code"
-for p in shenjing-life shenjing-preset persona-life; do
+for p in shenjing-life shenjing-preset persona-life shenjing-brain; do
   if [ -d "$WORKSPACE/$p" ]; then
     mkdir -p "$REPO/code/$p"
-    tar -C "$WORKSPACE/$p" --exclude=node_modules --exclude=.venv -cf - . | tar -C "$REPO/code/$p" -xf -
+    tar -C "$WORKSPACE/$p" --exclude=node_modules --exclude=.venv --exclude=.git -cf - . | tar -C "$REPO/code/$p" -xf -
   fi
 done
 mkdir -p "$REPO/code/life-sync"
@@ -247,7 +251,7 @@ KEEP_CODE=$(cd "$REPO/code" && find . -type f | while IFS= read -r rel; do
   rel="${rel#./}"
   case "$rel" in
     life-sync/*) [ -f "$HERE/${rel#life-sync/}" ] || echo x ;;
-    shenjing-life/*|shenjing-preset/*|persona-life/*)
+    shenjing-life/*|shenjing-preset/*|persona-life/*|shenjing-brain/*)
       p="${rel%%/*}"; [ -f "$WORKSPACE/$p/${rel#*/}" ] || echo x ;;
   esac
 done | wc -l)

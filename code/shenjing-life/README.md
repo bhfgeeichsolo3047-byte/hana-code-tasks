@@ -76,3 +76,15 @@ cd <插件目录> && node selfcheck.mjs      # 0 = 全过；1 = 有断言没过
 - dsh 的 bin.js 探测顺序：环境变量 `SHENJING_DSH_BIN` → node 解析器（`@deepseek-ai/dsh/lib/bin.js`）→ 常见全局位置 → 当前宿主进程入口。**探测不到就跳过并记日志**，不退化成裸 `dsh` 硬跑。
 - 一次唤醒独立会话跑一条，跑完写 `log/<日期>.jsonl`：`{at, trigger, result, note}`，`result` 是 `activity` / `idle`。
 - 这一整条在插件里没有对外暴露的"手动跑一轮"工具：v0.1 的唤醒只由定时器发起（`life_wake` 只返回 packet，不 spawn）。
+
+## 仓库
+
+源码：https://github.com/bhfgeeichsolo3047-byte/shenjing-life
+
+本机装法（link，改完重启宿主就生效）：
+
+```bash
+dsh plugin --profile web add link:/root/Documents/deepseek-harness/default-workspace/shenjing-life
+```
+
+代码和状态分开放：仓库里只有插件本体（不含 `node_modules`、不含家目录）；`$DSH_HOME/shenjing-life/` 下的 clock/state/mind/changelog/log 是运行数据，不进版本库。

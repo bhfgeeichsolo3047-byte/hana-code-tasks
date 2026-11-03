@@ -299,6 +299,77 @@ def check_mechanisms(dsh_home):
     return bad
 
 
+def _proc_web_start():
+    """正在跑的 dsh web 宿主进程 → (pid, 启动时刻 epoch 秒)。找不到 → (None, 原因)。
+
+    为什么要它：补丁可以装到磁盘上，但宿主内存里跑的是**进程启动那一刻**读进来的那份代码。
+    2026-11-03 早上 08:02 装好的 index.js，宿主是 07:07 起的 —— 它根本没读，
+    「私信监听」那句提示继续一分钟一行地写，一直写到 13:00。
+    **文件在 ≠ 在跑。** 这条尺子量的是中间那道缝。
+    """
+    try:
+        pids = [d for d in os.listdir("/proc") if d.isdigit()]
+    except OSError:
+        return None, "这台机器上没有 /proc，看不出来"
+    best = None
+    for pid in pids:
+        try:
+            raw = open("/proc/%s/cmdline" % pid, "rb").read().decode("utf-8", "replace")
+        except OSError:
+            continue
+        parts = [x for x in raw.split("\0") if x]
+        if not any(p.endswith("bin.js") for p in parts):
+            continue
+        if "web" not in parts:          # 主进程是 `bin.js web --patch ...`
+            continue
+        if "--profile" in parts:        # `--profile headless` 是子会话，不是宿主
+            continue
+        try:
+            st = os.stat("/proc/%s" % pid)   # /proc/<pid> 的 mtime 就是进程起来的时刻
+        except OSError:
+            continue
+        if best is None or st.st_mtime > best[1]:
+            best = (pid, st.st_mtime)
+    if best is None:
+        return None, "没找到在跑的 dsh web 宿主进程"
+    return best
+
+
+def check_loaded(dsh_home, start_override=None):
+    """补丁文件比宿主进程新 ⇒ 装了但还没加载。
+
+    返回 (状态, 依据, 最新的那个文件)：
+      'pending' —— 有文件比宿主新，宿主跑的还是旧代码
+      'loaded'  —— 都在宿主启动之前，内存里就是这一版
+      'unknown' —— 宿主没在跑 / 文件读不到，这条量不了（要算进"没量"）
+    """
+    pid, started = _proc_web_start()
+    if pid is None:
+        return "unknown", started, None
+    if start_override is not None:
+        pid, started = pid, start_override
+    newest = None
+    for desc, rel, _ in MECHANISM_CHECKS:
+        # 只比**宿主进程 import 的模块**（profiles/…/node_modules 里的 .js/.mjs）。
+        # life-sync/run.sh、bundle.sh 那种是每次跑都重读的脚本，改了立刻生效，
+        # 拿它们比进程启动时间会冤枉人 —— 一改备份脚本就报"没加载"。
+        if not rel.startswith("profiles/"):
+            continue
+        p = os.path.join(dsh_home, rel.replace("/", os.sep))
+        try:
+            m = os.stat(p).st_mtime
+        except OSError:
+            continue
+        if newest is None or m > newest[1]:
+            newest = (rel, m)
+    if newest is None:
+        return "unknown", "那几个补丁模块一个都读不到", None
+    where = "pid=%s，%s 起" % (pid, time.strftime("%m-%d %H:%M:%S", time.localtime(started)))
+    if newest[1] > started + 1.0:
+        return "pending", where, newest
+    return "loaded", where, newest
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--selftest", action="store_true", help="造一个丢文件的反例，确认它真会报")
@@ -472,8 +543,30 @@ def main():
                 ok6 = hours > 0          # 上限压到 0 时必须判成"旧"
                 print("反例六：远端快照现在是 %.1f 小时前的；把上限压到 0 → %s"
                       % (hours, "报出来了" if ok6 else "没报，这条检查是假的"))
+
+        # 反例七：'装了但没生效' 这条也得能真报。
+        # 不碰真文件：把宿主的启动时刻往补丁那个文件**之前**挪一秒，
+        # 那它就"比宿主新"了，必须报 pending。只动比较的那一端，不动被测的实物。
+        dsh_home7 = os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh-beta")
+        state7, where7, newest7 = check_loaded(dsh_home7)
+        ok7 = None
+        if state7 == "unknown":
+            print("反例七：宿主那边量不了（%s），这条这次跳过 —— 不算通过" % where7)
+        elif newest7 is None:
+            ok7 = False
+            print("反例七：读不到补丁模块，这条量不了 —— 算失败")
+        else:
+            fake_start = newest7[1] - 5.0     # 假装宿主比那个文件早五秒起
+            st7, wh7, _ = check_loaded(dsh_home7, start_override=fake_start)
+            ok7 = st7 == "pending"
+            print("反例七：假装宿主起在 %s 之前五秒 → %s（最新那个 %s 改于 %s）"
+                  % (newest7[0], "报出来了" if ok7 else "没报，这条检查是假的",
+                     newest7[0], time.strftime("%m-%d %H:%M:%S", time.localtime(newest7[1]))))
+            if ok7:
+                print("  （2026-11-03 真发生过：08:02 装好，07:07 起的宿主没读，"
+                      "报错一直写到 13:00）")
         return 0 if (ok and ok2 and ok4 is not False and ok5 is not False
-                     and ok6 is not False) else 9
+                     and ok6 is not False and ok7 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
@@ -489,9 +582,11 @@ def main():
             print("                 外加 _diverged/ 里 %d 份分叉存档（只许多不许少）" % len(remote_div))
 
     mech = []
+    loaded_state, loaded_where, loaded_newest = None, None, None
+    dsh_home = os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh-beta")
     if not a.skip_mechanisms:
-        dsh_home = os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh-beta")
         mech = check_mechanisms(dsh_home)
+        loaded_state, loaded_where, loaded_newest = check_loaded(dsh_home)
 
     code = 0
     if lost:
@@ -525,6 +620,15 @@ def main():
             print("      %s 里找不到：%s" % (rel, missing))
         print("  → 要么把机制补回代码，要么把 REBIRTH.md 里那句承诺删掉。")
         print("     不许让它继续这么放着：文档说在、其实不在，比缺东西更难发现。")
+    if loaded_state == "pending":
+        code = code or 10
+        print("\n[装了但没生效] 补丁文件比宿主进程新（%s）：" % loaded_where)
+        print("  %s 是 %s 改的。宿主起在那之后，内存里跑的还是旧代码。"
+              % (loaded_newest[0], time.strftime("%m-%d %H:%M:%S",
+                                                 time.localtime(loaded_newest[1]))))
+        print("  → 重启 dsh web 之后这条才会消失。在那之前，别把「装好了」说成「修好了」。")
+        print("     （2026-11-03 就是这么过的：08:02 装好，07:07 起的宿主没读，")
+        print("       刷屏那句一直写到 13:00，而体检只看文件，报 exit 0。）")
     if code == 0:
         # 2026-10-29 加：**"没反例"和"没证据"必须分开。**
         # 那天我在日记里骂过一次"exit 0 可能是什么都没比"，
@@ -538,6 +642,8 @@ def main():
             unmeasured.append("远端 HEAD（%s）" % remote_err)
         if a.skip_mechanisms:
             unmeasured.append("机制记号（--skip-mechanisms）")
+        elif loaded_state == "unknown":
+            unmeasured.append("补丁有没有被加载（%s）" % loaded_where)
         if unmeasured:
             print("\n结论不完整：有 %d 把尺子这次没量 →" % len(unmeasured))
             for u in unmeasured:

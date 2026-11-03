@@ -140,6 +140,16 @@ bundle/hana-*.tar.gz      整包。一个文件，不用懂 git 也能复原 —
   `life-sync/diverged-seen.txt`，这次对一遍，少了就报——那等于对面那段话彻底没了。
 - `--selftest` 第五条反例专盯这条。
 
+**第四样：写对了，但没在跑（2026-11-03 加，exit 10）。**
+早上 08:02 把补丁装进 `node_modules`，体检 exit 0；可宿主进程是 07:07 起的，内存里跑的还是旧代码。
+于是 `duty.log` 里那句「私信监听」继续一分钟一行地写，一路写到 13:00——
+**文件在 ≠ 在跑**，而前面的判据全都只看文件。
+判据：拿 `/proc/<pid>` 的 mtime 当宿主（`bin.js web`，不是 `--profile headless` 子会话）的启动时刻，
+跟补丁模块的 mtime 比。文件比宿主新 → exit 10，明说"装了但没生效，重启才作数"。
+只比 `profiles/*/node_modules/` 里的模块；`life-sync/run.sh` 这种脚本每次跑都重读，改了立刻生效，拿它比会冤枉人。
+宿主没在跑 → 这条量不了，算进"没量"（exit 7），不许当通过。
+`--selftest` 第七条：把宿主启动时刻往补丁之前挪 5 秒 → 必须报 pending。
+
 分支 `mnemon-sync`（记忆插件自己推的）：`mnemon/payload/runtime/{MEMORY,USER}.md` + 5 篇文档。
 两个分支互不覆盖，**要复活两个都要**。
 
