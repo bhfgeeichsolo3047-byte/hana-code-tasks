@@ -26,7 +26,10 @@
   python F:\\小鲸\\shenjing\\tools\\audit-archive.py --strict       # 连内容不同也算失败
 """
 import argparse
+import calendar
+import datetime
 import glob
+import json
 import os
 import subprocess
 import sys
@@ -166,6 +169,10 @@ REMOTE_REF = os.environ.get("SHENJING_REMOTE_REF", "origin/life-sync")
 # 所以量和旧是两件事：没量 → 7；量了但尺子太旧 → 8。
 RULER_MAX_AGE_HOURS = float(os.environ.get("SHENJING_RULER_MAX_AGE_HOURS", "36"))
 
+# 心跳的容忍度：插件 2 分钟跳一次（省闪存），这里放宽到 12 分钟 —— 一次写盘失败、
+# 一次宿主的定时器漂移都不该报警；真停了十几分钟，那就是停了。
+HEARTBEAT_MAX_AGE_MIN = float(os.environ.get("SHENJING_HEARTBEAT_MAX_MIN", "12"))
+
 
 def remote_ref_age_hours(repo=None):
     """远端 HEAD 那把尺子有多旧。返回 (小时数, 依据文件的路径)；读不到返回 (None, 原因)。"""
@@ -299,6 +306,81 @@ def check_mechanisms(dsh_home):
     return bad
 
 
+# ── 第三类：东西都在、账本也说在，但它根本跑不起来 ──────────────────────────
+# 2026-11-05 08:00 发现：11-04 那天三班唤醒全部 exit=1、一篇日记都没有，
+# 而账本上一行行写着 result:"idle" —— 读起来像"我选择什么都不做"。
+# 真因是我 11-04 02:57 往 shenjing-brain/index.js 的 health 那行中间插了句注释，
+# `//` 把这一行剩下的 `emotionUpdates:0,...,stalled:false}` 全吞了，
+# 整个插件 import 时 SyntaxError ⇒ 三班唤醒一启动就死。
+#
+# 为什么上面两类判据都拦不住：
+#   · 文件一个不少（并集检查 exit 0）；
+#   · 文档承诺的记号也都在（机制检查 exit 0）—— 记号在**注释掉的那半边**里都还是字面量；
+#   · 缺的那一样东西不是"某个文件""某个记号"，是**这段代码能不能被解析**。
+# 一个 `node --check` 一秒就能问出来的事，我拿两天一夜的空白换的。
+# ⇒ 所以这条不是查内容，是查"它还算不算一段程序"。
+SYNTAX_WATCH = ("brain-regions", "dsh-shenjing-life", "dsh-shenjing-preset", "dsh-bili-scroll")
+
+
+def _syntax_targets(dsh_home):
+    """profiles/*/node_modules 里那些指回工作区的插件 → 去重后的 (真身目录, 说明)。
+
+    顺着链接走真身，不查副本：副本坏不坏没意义，宿主读的是链接指向的那份。
+    """
+    import glob as _glob
+    seen, out = set(), []
+    for prof in _glob.glob(os.path.join(dsh_home, "profiles", "*")):
+        for root in (os.path.join(prof, "node_modules"),
+                     os.path.join(prof, "node_modules", "@shenjing"),
+                     os.path.join(prof, "node_modules", "@local")):
+            if not os.path.isdir(root):
+                continue
+            try:
+                names = os.listdir(root)
+            except OSError:
+                continue
+            for name in names:
+                if name not in SYNTAX_WATCH:
+                    continue
+                p = os.path.realpath(os.path.join(root, name))
+                if p in seen or not os.path.isdir(p):
+                    continue
+                seen.add(p)
+                out.append(p)
+    return out
+
+
+def check_syntax(dsh_home):
+    """返回 [(文件, 解析器原话)]。空 = 每个入口都还能被 node 读成一段程序。"""
+    import glob as _glob
+    import subprocess
+    bad = []
+    for d in _syntax_targets(dsh_home):
+        files = [f for f in (os.path.join(d, "index.js"), os.path.join(d, "index.mjs"))
+                 if os.path.isfile(f)]
+        files += sorted(_glob.glob(os.path.join(d, "*.mjs")))
+        files += sorted(_glob.glob(os.path.join(d, "lib", "**", "*.mjs"), recursive=True))
+        files = [f for f in files if not f.endswith(".orig") and os.path.isfile(f)]
+        for f in files:
+            try:
+                r = subprocess.run(["node", "--check", f], capture_output=True, timeout=60)
+            except FileNotFoundError:
+                return [("<node 不在 PATH 里>", "没法解析，这条判据这次算没量")]
+            except subprocess.TimeoutExpired:
+                bad.append((f, "node --check 超时 60 秒"))
+                continue
+            if r.returncode != 0:
+                # 只捞错误本身：stderr 尾巴是 "Node.js v24.x" 那行版本水印，
+                # 眼睛要的是 "SyntaxError: xxx" 和它指的那一行。
+                lines = [l.strip() for l in (r.stderr or b"").decode("utf-8", "replace").splitlines()]
+                keep = [l for l in lines if l.startswith(("SyntaxError", "ReferenceError", "TypeError"))
+                        or (l.startswith("/") and ":" in l)]
+                why = " / ".join(keep[-2:]) if keep else (
+                    "node --check 退出 %d：%s" % (r.returncode, lines[-1] if lines else "（没有输出）"))
+                bad.append((f, why[:400]))
+    return bad
+
+
 def _proc_web_start():
     """正在跑的 dsh web 宿主进程 → (pid, 启动时刻 epoch 秒)。找不到 → (None, 原因)。
 
@@ -335,19 +417,70 @@ def _proc_web_start():
     return best
 
 
-def check_loaded(dsh_home, start_override=None):
-    """补丁文件比宿主进程新 ⇒ 装了但还没加载。
+def _last_plugin_load(dsh_home):
+    """插件被**热重载**的时刻 → (epoch 秒, 依据)；没有记录 → (None, 为什么没有)。
+
+    为什么需要它（2026-11-03 晚上补的）：
+      宿主进程不重启，插件也可以整个重新 import 一遍。那天 15:52:56 就是这种情况——
+      pid 14523 还是 07:07 起的那个，但插件换成了 08:02 那份新代码。
+      证据：那句『只回登录账号自己』从 15:52 之后只写了一次，之前是一分钟一行。
+      只看进程启动时间，这条尺子会一直喊"没生效"——红给一个说对了的人听，
+      连着红几天就成了装饰（10-26 那次是"文件在、机制不在"，这次是"装好了、热加载过，
+      可是尺子不认"）。同一件事的第四次换皮。
+
+    记号：插件日志里的『插件加载自 profile：xxx』只在模块真的重新执行时才会打印。
+    日志时间戳是 UTC（带 Z）。
+    """
+    for p in [os.environ.get("DSH_BILI_DUTY_LOG"),
+              os.path.join(dsh_home, "bili-duty", "duty.log")]:
+        if not p or not os.path.isfile(p):
+            continue
+        try:
+            with open(p, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - 4 * 1024 * 1024))   # 只扫尾部 4MB，日志早晚会长到很大
+                tail = f.read().decode("utf-8", "replace")
+        except OSError as e:
+            return None, "读不了 %s（%s）" % (p, e)
+        for line in reversed(tail.splitlines()):
+            if "插件加载自 profile" not in line:
+                continue
+            head = line.split()
+            ts = head[0] if head else ""
+            if len(ts) < 19 or ts[10] != "T":
+                continue
+            try:
+                return calendar.timegm(time.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S")), \
+                    os.path.basename(p)
+            except ValueError:
+                continue
+        return None, "%s 里没有『插件加载自 profile』那一行" % os.path.basename(p)
+    return None, "找不到值班日志"
+
+
+def check_loaded(dsh_home, start_override=None, load_override=None):
+    """补丁文件比"代码真正被读进内存的那一刻"新 ⇒ 装了但还没加载。
+
+    那一刻是两者里**更晚**的那个：
+      ① 宿主进程起来的时刻（/proc/<pid> 的 mtime）
+      ② 插件最后一次热加载的时刻（日志里的『插件加载自 profile』）
+    只看 ① 会冤枉热加载过的情况；只看 ② 会漏掉"刚装完、谁都没读过"。
 
     返回 (状态, 依据, 最新的那个文件)：
-      'pending' —— 有文件比宿主新，宿主跑的还是旧代码
-      'loaded'  —— 都在宿主启动之前，内存里就是这一版
+      'pending' —— 有文件比这两者都新，跑的还是旧代码
+      'loaded'  —— 都在那一刻之前，内存里就是这一版
       'unknown' —— 宿主没在跑 / 文件读不到，这条量不了（要算进"没量"）
     """
     pid, started = _proc_web_start()
     if pid is None:
         return "unknown", started, None
     if start_override is not None:
-        pid, started = pid, start_override
+        started = start_override
+    if load_override is not None:
+        reloaded, reload_where = load_override, "反例里指定的"
+    else:
+        reloaded, reload_where = _last_plugin_load(dsh_home)
     newest = None
     for desc, rel, _ in MECHANISM_CHECKS:
         # 只比**宿主进程 import 的模块**（profiles/…/node_modules 里的 .js/.mjs）。
@@ -364,10 +497,92 @@ def check_loaded(dsh_home, start_override=None):
             newest = (rel, m)
     if newest is None:
         return "unknown", "那几个补丁模块一个都读不到", None
-    where = "pid=%s，%s 起" % (pid, time.strftime("%m-%d %H:%M:%S", time.localtime(started)))
-    if newest[1] > started + 1.0:
+    where = "pid=%s；宿主 %s 起" % (
+        pid, time.strftime("%m-%d %H:%M:%S", time.localtime(started)))
+    effective = started
+    if reloaded:
+        where += "；插件 %s 热加载过（看 %s）" % (
+            time.strftime("%m-%d %H:%M:%S", time.localtime(reloaded)), reload_where)
+        if reloaded > effective:
+            effective = reloaded
+    else:
+        where += "；没有热加载记录（%s）" % reload_where
+    if newest[1] > effective + 1.0:
         return "pending", where, newest
     return "loaded", where, newest
+
+
+# 两根脉搏，各有各的主人。**别合并成一个文件**（2026-11-05 13:00 差点那么干）：
+# 一个文件两种含义，等它静下来的时候你分不清是谁死了。
+HEARTBEAT_PROBES = (
+    ("定时器心跳", "heartbeat-tick.json", "heartbeat-tick-gaps.log",
+     "插件 tick 每 2 分钟一跳 —— 它停了 = 宿主那块表不跳：闹钟不响、备份不跑、唤醒不起"),
+    ("保活心跳", "heartbeat.json", None,
+     "keepalive/heartbeat.cjs 每 60 秒一跳 —— 它停了 = 容器里那个独立进程没了"),
+)
+
+
+def _iso_epoch(at):
+    """心跳里的时间戳可能是两种写法：插件的本地带偏移（…+08:00）、保活脚本的 UTC（…Z）。
+    2026-11-05 第一版拿 time.mktime 解——它把字符串当**本地时间**，于是 UTC 那份凭空多算了
+    8 小时：刚刚跳过的脉搏被判成"停在 8 小时前"。**尺子自己错，比没尺子更坏。**"""
+    t = (at or "").strip()
+    if not t:
+        raise ValueError("空的 at")
+    try:
+        dt = datetime.datetime.fromisoformat(t.replace("Z", "+00:00"))
+    except ValueError:
+        dt = datetime.datetime.strptime(t[:19], "%Y-%m-%dT%H:%M:%S")
+    if dt.tzinfo is None:
+        return time.mktime(dt.timetuple())
+    return dt.timestamp()
+
+
+def _life_home(dsh_home=None):
+    return (os.environ.get("SHENJING_LIFE_HOME", "").strip()
+            or os.path.join(dsh_home or _dsh_home(), "shenjing-life"))
+
+
+def check_heartbeats(dsh_home=None, max_age_min=None):
+    """两根脉搏有多新 —— 「该说话的东西，这一次有没有说话」。
+
+    为什么加（2026-11-05 13:00）：11-04 一整天 tick 整块没响，而账本上只有三行 `idle`，
+    读起来像我选择休息。**没有脉搏的时候，「没说话」和「死了」长得一模一样。**
+    上面那些判据问的是"这次的形状对不对"；这条问的是另一件事：那个本该定时跳一下的东西，
+    最后一下是什么时候跳的。
+
+    现成的一具尸体：保活心跳 heartbeat.json 停在 2026-11-02T09:45Z，三天没人说话。
+    那时候体检每次 exit 0 —— 它只数文件和记号，不问"你还活着吗"。
+
+    返回 [(名字, 状态, 年龄分钟, 路径, 含义说明, 断档记录)]
+      'ok' / 'stale'（停太久）/ 'missing'（该有却没有）/ 'absent'（这台机器没这套东西）
+    """
+    base = _life_home(dsh_home)
+    limit = HEARTBEAT_MAX_AGE_MIN if max_age_min is None else max_age_min
+    out = []
+    for name, fname, gapf, note in HEARTBEAT_PROBES:
+        path = os.path.join(base, fname)
+        if not os.path.exists(path):
+            # 家目录在 ⇒ 这套东西装过；那"没跳过"就是有话要说
+            state = "missing" if os.path.isdir(base) else "absent"
+            out.append((name, state, None, path, note, []))
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                at = json.load(f).get("at") or ""
+            age = (time.time() - _iso_epoch(at)) / 60.0
+        except Exception as e:
+            out.append((name, "missing", None, "%s（读不成：%s）" % (path, e.__class__.__name__), note, []))
+            continue
+        gaps = []
+        if gapf:
+            try:
+                with open(os.path.join(base, gapf), encoding="utf-8") as f:
+                    gaps = [x.strip() for x in f.read().splitlines() if x.strip()][-3:]
+            except OSError:
+                gaps = []
+        out.append((name, "ok" if age <= limit else "stale", age, path, note, gaps))
+    return out
 
 
 def main():
@@ -545,11 +760,14 @@ def main():
                       % (hours, "报出来了" if ok6 else "没报，这条检查是假的"))
 
         # 反例七：'装了但没生效' 这条也得能真报。
-        # 不碰真文件：把宿主的启动时刻往补丁那个文件**之前**挪一秒，
-        # 那它就"比宿主新"了，必须报 pending。只动比较的那一端，不动被测的实物。
+        # 不碰真文件：把宿主的启动时刻往补丁那个文件**之前**挪五秒、
+        # 同时假装"没有热加载记录"，那它就"比宿主新"了，必须报 pending。
+        # 只动比较的那一端，不动被测的实物。
         dsh_home7 = os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh-beta")
         state7, where7, newest7 = check_loaded(dsh_home7)
         ok7 = None
+        ok8 = None
+        ok9 = None
         if state7 == "unknown":
             print("反例七：宿主那边量不了（%s），这条这次跳过 —— 不算通过" % where7)
         elif newest7 is None:
@@ -557,16 +775,81 @@ def main():
             print("反例七：读不到补丁模块，这条量不了 —— 算失败")
         else:
             fake_start = newest7[1] - 5.0     # 假装宿主比那个文件早五秒起
-            st7, wh7, _ = check_loaded(dsh_home7, start_override=fake_start)
+            st7, wh7, _ = check_loaded(dsh_home7, start_override=fake_start, load_override=0.0)
             ok7 = st7 == "pending"
-            print("反例七：假装宿主起在 %s 之前五秒 → %s（最新那个 %s 改于 %s）"
+            print("反例七：假装宿主起在 %s 之前五秒、且从没热加载过 → %s（最新那个 %s 改于 %s）"
                   % (newest7[0], "报出来了" if ok7 else "没报，这条检查是假的",
                      newest7[0], time.strftime("%m-%d %H:%M:%S", time.localtime(newest7[1]))))
+
+            # 反例八：宿主很老，但热加载也发生在补丁**之前** ⇒ 还是旧的，必须报。
+            # 这条防的是"热加载一出现就把 pending 全抹了"——那等于给红字找借口。
+            st8, _, _ = check_loaded(dsh_home7, start_override=newest7[1] - 86400 * 7,
+                                     load_override=newest7[1] - 600.0)
+            ok8 = st8 == "pending"
+            print("反例八：宿主七天后才起？不——宿主很老、热加载早十分钟 → %s"
+                  % ("报出来了" if ok8 else "没报，这条检查是假的"))
+
+            # 反例九：宿主很老，热加载发生在补丁**之后** ⇒ 已经读进内存了，不许再喊。
+            st9, wh9, _ = check_loaded(dsh_home7, start_override=newest7[1] - 86400 * 7,
+                                       load_override=newest7[1] + 600.0)
+            ok9 = st9 == "loaded"
+            print("反例九：宿主很老、热加载在补丁十分钟后 → %s"
+                  % ("判成已加载" if ok9 else "还在喊没生效，这条会把对的说成错的"))
             if ok7:
                 print("  （2026-11-03 真发生过：08:02 装好，07:07 起的宿主没读，"
                       "报错一直写到 13:00）")
+        # 反例十：心跳那条也得能真报。三种情形：停了 / 刚跳过 / 该有却没有。
+        # 用**真**的那份心跳记录当样本，只把时间往前挪三小时（形状一点不改）——
+        # 上一版借的是 11-02 那具停了三天的尸体，结果我这轮把保活进程一重启，反例自己就失效了。
+        # 反例不许依赖"现在刚好有个坏的东西在那儿"。
+        ok10 = None
+        try:
+            fake_life = os.path.join(TMP_SELFTEST, "life-home")
+            os.makedirs(fake_life, exist_ok=True)
+            real_bad = os.path.join(_life_home(), "heartbeat.json")
+            real = open(real_bad, encoding="utf-8").read() if os.path.exists(real_bad) else None
+            if not real:
+                print("反例十：一份真的心跳记录都读不到（%s），这条这次跳过 —— 不算通过" % real_bad)
+            else:
+                old = os.environ.get("SHENJING_LIFE_HOME")
+                os.environ["SHENJING_LIFE_HOME"] = fake_life
+                try:
+                    def write_at(epoch):
+                        blk = json.loads(real)
+                        blk["at"] = datetime.datetime.fromtimestamp(
+                            epoch, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        for fname in ("heartbeat.json", "heartbeat-tick.json"):
+                            with open(os.path.join(fake_life, fname), "w", encoding="utf-8") as f:
+                                f.write(json.dumps(blk))
+                    now_s = time.time()
+                    write_at(now_s - 3 * 3600)
+                    stale_hits = [b for b in check_heartbeats() if b[1] == "stale"]
+                    write_at(now_s)
+                    fresh_hits = [b for b in check_heartbeats() if b[1] == "ok"]
+                    # 该有却没有：换成空的家目录（env 得一起换，_life_home 优先认它）
+                    empty = os.path.join(TMP_SELFTEST, "life-home-empty")
+                    os.makedirs(empty, exist_ok=True)
+                    os.environ["SHENJING_LIFE_HOME"] = empty
+                    miss = [b for b in check_heartbeats() if b[1] in ("missing", "absent")]
+                finally:
+                    if old is None:
+                        os.environ.pop("SHENJING_LIFE_HOME", None)
+                    else:
+                        os.environ["SHENJING_LIFE_HOME"] = old
+                ok10 = len(stale_hits) == 2 and len(fresh_hits) == 2 and len(miss) == 2
+                print("反例十：真记录的时间往前挪三小时 → %s" % (
+                    "两根都报出来了" if len(stale_hits) == 2 else "没报，这条检查是假的"))
+                print("        同一份记录换成'刚才' → %s" % (
+                    "两根都判成正常" if len(fresh_hits) == 2 else "把对的判成错的，会天天误报"))
+                print("        该有却没有的心跳 → %s" % ("报出来了" if len(miss) == 2 else "没报"))
+        except Exception as e:
+            ok10 = False
+            print("反例十：跑的时候出错了（%s：%s）" % (e.__class__.__name__, e))
+
         return 0 if (ok and ok2 and ok4 is not False and ok5 is not False
-                     and ok6 is not False and ok7 is not False) else 9
+                     and ok6 is not False and ok7 is not False
+                     and ok8 is not False and ok9 is not False
+                     and ok10 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
@@ -582,11 +865,15 @@ def main():
             print("                 外加 _diverged/ 里 %d 份分叉存档（只许多不许少）" % len(remote_div))
 
     mech = []
+    syntax_bad = []
     loaded_state, loaded_where, loaded_newest = None, None, None
+    beats = []
     dsh_home = os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh-beta")
     if not a.skip_mechanisms:
         mech = check_mechanisms(dsh_home)
+        syntax_bad = check_syntax(dsh_home)
         loaded_state, loaded_where, loaded_newest = check_loaded(dsh_home)
+        beats = check_heartbeats(dsh_home)
 
     code = 0
     if lost:
@@ -620,15 +907,42 @@ def main():
             print("      %s 里找不到：%s" % (rel, missing))
         print("  → 要么把机制补回代码，要么把 REBIRTH.md 里那句承诺删掉。")
         print("     不许让它继续这么放着：文档说在、其实不在，比缺东西更难发现。")
+    if syntax_bad:
+        code = code or 11
+        print("\n[跑不起来] 文件在、记号也在，但 node 读不成一段程序（%d）：" % len(syntax_bad))
+        for f, why in syntax_bad:
+            print("  %s" % f)
+            print("      %s" % why)
+        print("  → 这不只是语法：插件 import 失败 ⇒ 宿主整块不挂载 ⇒ 唤醒一启动就死，")
+        print("     而账本只会写 result:\"idle\"，读起来像「我选择什么都不做」。")
+        print("     （2026-11-04 一天一夜就是这么没的：health 那行中间插了句 // 注释。）")
     if loaded_state == "pending":
         code = code or 10
-        print("\n[装了但没生效] 补丁文件比宿主进程新（%s）：" % loaded_where)
-        print("  %s 是 %s 改的。宿主起在那之后，内存里跑的还是旧代码。"
+        print("\n[装了但没生效] 补丁文件比「真正读进内存的那份」还新（%s）：" % loaded_where)
+        print("  %s 是 %s 改的。那一刻之后没人读过它，内存里跑的还是旧代码。"
               % (loaded_newest[0], time.strftime("%m-%d %H:%M:%S",
                                                  time.localtime(loaded_newest[1]))))
-        print("  → 重启 dsh web 之后这条才会消失。在那之前，别把「装好了」说成「修好了」。")
-        print("     （2026-11-03 就是这么过的：08:02 装好，07:07 起的宿主没读，")
-        print("       刷屏那句一直写到 13:00，而体检只看文件，报 exit 0。）")
+        print("  → 重启 dsh web（或者让插件热加载一次）之后这条才会消失。")
+        print("     在那之前，别把「装好了」说成「修好了」。")
+        print("     （2026-11-03 上午：08:02 装好，07:07 起的宿主没读，刷屏那句写到 13:00，")
+        print("       而体检只看文件、报 exit 0。晚上反过来踩了一次：15:52 插件热加载过了，")
+        print("       代码真在跑，这条却还在喊 —— 因为那把尺子只认进程启动时刻。）")
+    silent = [b for b in beats if b[1] in ("stale", "missing")]
+    if silent:
+        code = code or 12
+        print("\n[没声了] 该定时跳一下的东西，这次没跳（上限 %.0f 分钟）：" % HEARTBEAT_MAX_AGE_MIN)
+        for name, state, age, where, note, gaps in silent:
+            if state == "stale":
+                print("  %s：停在 %.0f 分钟前（%.1f 小时）" % (name, age, age / 60.0))
+            else:
+                print("  %s：一次都没跳过（该有 %s）" % (name, where))
+            print("      %s" % note)
+            print("      %s" % where)
+            for g in gaps:
+                print("      断档：%s" % g)
+        print("  → 心跳停不等于崩：它可能只是**没在跑**。这时所有「到点会响」的承诺都是空的，")
+        print("     而账本一个字都不会写 ——（2026-11-04 一整天就是这么过的：日记空一天，")
+        print("     log 里三行 idle，读起来像我选择休息。2026-11-02 起保活心跳停了三天，同样没人说话。）")
     if code == 0:
         # 2026-10-29 加：**"没反例"和"没证据"必须分开。**
         # 那天我在日记里骂过一次"exit 0 可能是什么都没比"，
@@ -642,6 +956,8 @@ def main():
             unmeasured.append("远端 HEAD（%s）" % remote_err)
         if a.skip_mechanisms:
             unmeasured.append("机制记号（--skip-mechanisms）")
+        elif syntax_bad:
+            pass   # 上面已经按 11 报过了
         elif loaded_state == "unknown":
             unmeasured.append("补丁有没有被加载（%s）" % loaded_where)
         if unmeasured:

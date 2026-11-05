@@ -134,7 +134,25 @@ for (const [f, label] of [
   [files.changeFile, 'changelog.md'], [files.logDir, 'log/'],
 ]) ok(existsSync(f), '家目录里铺好了 ' + label)
 ok(existsSync(join(ARCHIVE, 'open_loops.md')), '书桌上铺好了 open_loops.md')
-ok(life.timerState?.mode === 'ctx', '定时器走的是宿主的 ctx.setInterval（mode=' + (life.timerState?.mode || '无') + '）')
+// 在唤醒子进程里跑自检时 startTimer 会**故意**提前返回（不起第二块表），
+// 那时 mode 是空的 —— 这条不该红成"坏了"，该说清"这次不适用"。
+const IS_WAKE_CHILD = process.env.SHENJING_WAKE_CHILD === '1' || process.env.DSH_PROFILE === 'headless'
+if (IS_WAKE_CHILD) {
+  ok(true, '定时器：(唤醒子进程/headless 里不起表，这条不适用)')
+  ok(true, '心跳：(不起表就没有心跳，这条不适用)')
+} else {
+  ok(life.timerState?.mode === 'ctx', '定时器走的是宿主的 ctx.setInterval（mode=' + (life.timerState?.mode || '无') + '）')
+  // 心跳（2026-11-05 加）：没有脉搏的时候，「tick 死了」和「我选择休息」长得一模一样。
+  // 这里只验"起来就跳了一下"；断档的记录由 audit-archive.py 的反例十看着。
+  const beatFile = join(life.stateDir, 'heartbeat-tick.json')
+  const hasBeat = existsSync(beatFile)
+  ok(hasBeat, '心跳文件写出来了（heartbeat-tick.json）', hasBeat ? '' : 'tick 从来没跳过 —— 表起了但脉搏没有')
+  if (hasBeat) {
+    const b = JSON.parse(readFileSync(beatFile, 'utf8'))
+    const ageMs = Date.now() - Date.parse(b.at)
+    ok(Number.isFinite(ageMs) && ageMs < 5 * 60_000, '心跳时间戳是刚刚（' + Math.round(ageMs / 1000) + ' 秒前）', String(b.at))
+  }
+}
 
 const byName = (n) => registered.find((t) => t.name === n)
 const call = async (n, args) => await byName(n).execute(args ?? {}, {})

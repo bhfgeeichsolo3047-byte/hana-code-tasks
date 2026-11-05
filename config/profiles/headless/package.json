@@ -2,6 +2,7 @@
   "name": "dsh-profile-headless",
   "private": true,
   "dependencies": {
+    "@shenjing/brain-regions": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-brain",
     "dsh-shenjing-life": "link:/root/Documents/deepseek-harness/default-workspace/shenjing-life"
   },
   "dsh": {
@@ -9,7 +10,8 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-headless",
-        "dsh-shenjing-life"
+        "dsh-shenjing-life",
+        "@shenjing/brain-regions"
       ]
     }
   }

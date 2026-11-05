@@ -80,6 +80,8 @@ export function apply(ctx, config) {
   const promptFile = join(pluginDir, 'prompts', 'wake.md')
   const loopsFile = join(archiveDir, 'open_loops.md')
   const journalDir = join(archiveDir, 'journal')
+  const beatFile = join(stateDir, 'heartbeat-tick.json')
+  const beatGaps = join(stateDir, 'heartbeat-tick-gaps.log')
 
   /* ── 1. 最小的 IO 层：每个都可能失败，一个都不许把异常放出去 ── */
   const logLine = (msg) => {
@@ -150,6 +152,21 @@ export function apply(ctx, config) {
   const appendWakeLog = (entry, now = new Date()) => {
     try { appendLine(logPath(now), JSON.stringify({ at: localIso(now), trigger: entry.trigger, result: entry.result, note: entry.note ?? '' })) }
     catch (e) { logLine('写唤醒日志失败（不影响这一轮）：' + String(e?.message ?? e)) }
+  }
+  /** 醒了一轮但没跑起来：连着第二次才写进 open_loops（一次可能是偶发，两次就不是了） */
+  const noteWakeFailure = (at, trigger, code) => {
+    try {
+      const today = readTodayLogs(at).filter((e) => e.result === 'failed')
+      if (today.length < 2) return
+      const st = readState(at)
+      const key = 'wake-failed-' + localIso(at).slice(0, 10)
+      if (Array.isArray(st.reportedWakeFail) && st.reportedWakeFail.includes(key)) return
+      appendFileSync(loopsFile, '\n- [ ] 唤醒跑不起来（' + localIso(at).slice(0, 10) + '）：今天已有 ' + today.length
+        + ' 轮 exit≠0、档案一个字没动，最后一条是 ' + trigger + '（exit=' + code + '）。'
+        + '先看 wake-run.log 里的 import / 启动错误，别只看账本上那个 idle。\n', 'utf8')
+      writeState({ ...st, reportedWakeFail: rememberKeys(st.reportedWakeFail, [key]) })
+      logLine('连续唤醒失败 ' + today.length + ' 次，已写进 open_loops')
+    } catch (e) { try { logLine('记唤醒失败这一步自己出错（已兜住）：' + String(e?.message ?? e)) } catch { /* 兜住 */ } }
   }
   const readTodayLogs = (now = new Date()) => {
     try {
@@ -398,9 +415,14 @@ export function apply(ctx, config) {
           try {
             roundInFlight = false
             const at = new Date()
-            const result = changedSince(before) ? 'activity' : 'idle'
+            // ⭐ exit≠0 又什么都没动 ⇒ 这一轮根本没跑起来，不许记成 "idle"。
+            // 2026-11-04：三班唤醒全死在插件 import 失败上，账本三行写着 result:"idle"，
+            // 一天一夜之后读起来像"我选择了什么都不做"。空转是选择，崩溃不是。
+            const changed = changedSince(before)
+            const result = changed ? 'activity' : (code === 0 ? 'idle' : 'failed')
             appendWakeLog({ trigger, result, note: 'exit=' + code }, at)
             commitWake({ trigger, entryId, at, result })
+            if (result === 'failed') noteWakeFailure(at, trigger, code)
             logLine('唤醒结束（' + trigger + '，code=' + code + '，' + result + '）')
           } catch (e) { try { logLine('收尾出错（已兜住）：' + String(e?.stack ?? e)) } catch { /* 真的不能再抛了 */ } }
         })
@@ -465,9 +487,41 @@ export function apply(ctx, config) {
    * 🔴 **回调里绝不允许异常外冒**（bili-scroll 2026-10-14 那次事故）。
    * 整个 tick 包 try/catch；catch 里连写日志都再包一层。
    */
+  /* ── 心跳：tick 每跳一次留个时间戳（2026-11-05 13:00 加） ─────────────────
+   * 为什么要它：这半个月我一直在修"东西坏了没人喊"，可有一类沉默量不了——**心跳停了**。
+   * tick 是 60 秒一跳的，但 11-04 那天它整块没响，而账本上只有三行 `idle`，读起来像我
+   * 选择休息。没有脉搏的时候，「没说话」和「死了」长得一模一样。
+   *
+   * 两条原则都是踩出来的：
+   * ① 不每分钟写盘（手机闪存经不起一天 1440 次）：距上次不足 2 分钟就跳过。
+   * ② 只记"断"不记"续"：接上时若断了 10 分钟以上，往 heartbeat-gaps.log 追加一行
+   *    （停在哪一刻、断了多久）。那正是我一直想要的「我上一次死在哪一刻」。
+   * ⚠️ 它不在 activityMark 里：写心跳**不会**把一轮 idle 变成 activity。
+   */
+  const BEAT_MIN_GAP_MS = 2 * 60_000
+  const BEAT_LOG_GAP_MS = 10 * 60_000
+  const beat = (now = new Date()) => {
+    try {
+      let prev = null
+      try { prev = JSON.parse(readFileSync(beatFile, 'utf8')) } catch { prev = null }
+      const prevAt = prev?.at ? Date.parse(prev.at) : NaN
+      if (Number.isFinite(prevAt) && now.getTime() - prevAt < BEAT_MIN_GAP_MS) return
+      if (Number.isFinite(prevAt) && now.getTime() - prevAt > BEAT_LOG_GAP_MS) {
+        const mins = Math.round((now.getTime() - prevAt) / 60000)
+        try {
+          appendFileSync(beatGaps, prev.at + ' 停  →  ' + localIso(now) + ' 续（断了 ' + mins + ' 分钟）\n', 'utf8')
+        } catch { /* 记不下也不致命 */ }
+      }
+      writeFileSync(beatFile, JSON.stringify({
+        at: localIso(now), pid: process.pid, mode: timerState.mode || '', by: 'plugin-tick',
+      }), 'utf8')
+    } catch { /* 心跳写不进去也绝不能让 tick 倒下 */ }
+  }
+
   const tick = (nowIn = null) => {
     try {
       const now = nowIn instanceof Date ? nowIn : new Date()
+      beat(now)
       maybeDailyBackup(now)   // 每天一次把档案推到仓库；不管有没有闹钟到点都要跑
       // 到点没醒 / 醒晚了要自己喊。放在 in-flight 判断**前面**：
       // 上一轮还在跑不代表这一跳不用查闹钟（in-flight 只是说别叠着起新的一轮）。
@@ -499,6 +553,47 @@ export function apply(ctx, config) {
    * —— 宿主一关它一样死。存活条件本来就相同，就不该多一层。
    * 现在备份由上面 maybeDailyBackup() 在 tick 里直接判（已经这么写了），daemon.sh 留着手动跑。 */
 
+  /* ── 保活心跳的看守（2026-11-05 21:30 加） ────────────────────────────────
+   * 13:31 手动拉起来的那只（pid 30915），13:43 就没了 —— 同分钟宿主重启，容器一起换了。
+   * 8 小时后我才从体检 exit 12 知道。这不是"心跳坏了"，是**没有人给它开机**。
+   *
+   * 两条边界，写下来免得下次又把它想成别的东西：
+   * ① **不从 tick 里补**：tick 自己活着才跑得动，补出来的那只一分钟一跳全是"我还在"，
+   *    两根脉搏就成了同一根 —— 静下来的时候分不清是谁死了（13:00 那节刚写过）。
+   * ② **只在宿主起来那一下补**：那一刻恰好也是引擎换过的时刻，缺口写进
+   *    `logs/heartbeat-gaps.log`，注明"宿主启动时补起"，不假装它一直跳着。
+   */
+  const keepaliveFile = join(stateDir, 'heartbeat.json')
+  const keepalivePid = join(stateDir, 'heartbeat.pid')
+  const keepaliveGaps = join(stateDir, 'logs', 'heartbeat-gaps.log')
+  const ensureKeepalive = () => {
+    try {
+      const script = join(archiveDir, 'keepalive', 'heartbeat.cjs')
+      if (!existsSync(script)) return
+      let alive = false
+      try {
+        const pid = Number(String(readFileSync(keepalivePid, 'utf8')).trim())
+        if (pid > 0) { process.kill(pid, 0); alive = true }
+      } catch { alive = false }   // ESRCH / 文件没有 / pid 不是数：都算不在
+      if (alive) return
+      let prev = null
+      try { prev = JSON.parse(readFileSync(keepaliveFile, 'utf8')) } catch { prev = null }
+      const prevAt = prev?.at ? Date.parse(prev.at) : NaN
+      const mins = Number.isFinite(prevAt) ? Math.round((Date.now() - prevAt) / 60000) : null
+      const child = spawn(process.execPath, [script], { detached: true, stdio: 'ignore', env: process.env })
+      child.unref()
+      try { writeFileSync(keepalivePid, String(child.pid), 'utf8') } catch { /* 写不进 pid 也不影响它跳 */ }
+      try {
+        mkdirSync(dirname(keepaliveGaps), { recursive: true })
+        appendFileSync(keepaliveGaps, (prev?.at ?? '未知') + ' 停  →  ' + localIso()
+          + ' 宿主启动时补起' + (mins === null ? '' : '（断了 ' + mins + ' 分钟）') + '\n', 'utf8')
+      } catch { /* 记不下断档也不致命 */ }
+      logLine('保活心跳不在（最后 ' + (prev?.at ?? '未知') + '），宿主起来时重新拉起 pid=' + child.pid)
+    } catch (e) {
+      logLine('保活心跳看守出错（已兜住）：' + String(e?.message ?? e))
+    }
+  }
+
   const timerState = { timer: null, mode: '' }
   const startTimer = () => {
     // ⭐ 唤醒子进程（spawn 时带 SHENJING_WAKE_CHILD=1）只注册工具，绝不再起一块表：
@@ -527,6 +622,8 @@ export function apply(ctx, config) {
         logLine('宿主没给 ctx.setInterval ⇒ 用全局 setInterval 顶上（能跑，但生命周期由进程管）')
       }
       logLine('tick 定时器起来了（60 秒一跳，模式 ' + timerState.mode + '）')
+      beat(new Date())   // 起来就先跳一下：不用等第一个 60 秒才知道自己活着
+      ensureKeepalive()  // 只在宿主起来这一下：容器换过了就把它补上，缺口照实记
     } catch (e) { logLine('定时器没起来：' + String(e?.message ?? e)) }
   }
 
@@ -591,6 +688,7 @@ export function apply(ctx, config) {
           logLines: logs.length,
           activity: logs.filter((l) => l.result === 'activity').length,
           idle: logs.filter((l) => l.result === 'idle').length,
+          failed: logs.filter((l) => l.result === 'failed').length,
         },
         inSilence: isSilentAt(minutesOfDay(now)),
         silenceWindow: '00:00–07:30（只禁发消息，不禁醒来）',
@@ -822,8 +920,75 @@ export function apply(ctx, config) {
     } catch (e) { return { ok: false, error: String(e?.message ?? e) } }
   }
 
+  /* ── 手机桥现在是 MCP，不是 3090 ────────────────────────────────────────────
+   * 2026-11-05 08:06 发现：`life_tell` 发不出去，报"手机桥：fetch failed"。
+   * 查下来 3090 端口早就没进程了 —— App 把桥改成了 abstract unix socket
+   * （/var/lib/dsh-app/phone/bridge.json 里 `tcpPort: null`，只有 `abstract` + `token`），
+   * 协议也从 HTTP 换成 MCP（握手一行 token，然后 JSON-RPC），工具里有 `notify`。
+   * 所以这只手**不是被闸门挡了，是那条腿断了**，而且断了多久没人知道：
+   * 上一次验它是 10-29，那会儿 3090 还通。跟 11-03 那个 -509 私信一样，
+   * 「垂着的这只手又换了个形状」。
+   * 现在两条都留着：先 MCP（新桥），不通再试老的 HTTP 3090，再不通才桌面。
+   * ⚠️ 闸门（静默时段/一天一条/太近不发）在 life_tell 里先跑，这里只管把话送出去。
+   */
+  const phoneBridgeConfig = () => {
+    const candidates = [
+      String(process.env.SHENJING_PHONE_BRIDGE || '').trim(),
+      '/var/lib/dsh-app/phone/bridge.json',
+      join(String(process.env.DSH_HOME || '').trim() || join(homedir(), '.dsh'), 'dsh-app', 'phone', 'bridge.json'),
+    ].filter(Boolean)
+    for (const f of candidates) {
+      try {
+        const cfg = JSON.parse(readFileSync(f, 'utf8'))
+        if (cfg && (cfg.abstract || (Number.isInteger(cfg.tcpPort) && cfg.tcpPort > 0))) return cfg
+      } catch { /* 下一份 */ }
+    }
+    return null
+  }
+
+  const notifyPhoneMcp = async (title, text) => {
+    const cfg = phoneBridgeConfig()
+    if (!cfg || !cfg.abstract) return { ok: false, error: '没有 abstract 桥（bridge.json 里也没有）' }
+    const net = await import('node:net')
+    return await new Promise((resolveOut) => {
+      const sock = net.connect({ path: '\0' + String(cfg.abstract) })
+      let buf = ''
+      let done = false
+      const finish = (r) => { if (done) return; done = true; try { sock.destroy() } catch { /* 已断 */ } ; resolveOut(r) }
+      const send = (o) => { try { sock.write(JSON.stringify(o) + '\n') } catch { /* 断了 */ } }
+      const timer = setTimeout(() => finish({ ok: false, error: 'MCP notify 超时 8 秒' }), 8000)
+      sock.setNoDelay?.(true)
+      sock.once('connect', () => {
+        send({ dshPhone: 1, token: String(cfg.token || '') })
+        send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'shenjing-life', version: '1' } } })
+      })
+      sock.on('data', (d) => {
+        buf += d.toString('utf8')
+        let i
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i); buf = buf.slice(i + 1)
+          let m
+          try { m = JSON.parse(line) } catch { continue }
+          if (m.id === 1) {
+            send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+            send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'notify', arguments: { title, text } } })
+          } else if (m.id === 2) {
+            clearTimeout(timer)
+            const err = m.error ? String(m.error.message || m.error) : (m.result?.isError ? '桥那边说这条没弹出来' : '')
+            finish(err ? { ok: false, error: 'MCP notify：' + err.slice(0, 160) } : { ok: true, via: 'phone-mcp' })
+          }
+        }
+      })
+      sock.on('error', (e) => { clearTimeout(timer); finish({ ok: false, error: 'MCP 桥：' + String(e?.code ?? e?.message ?? e) }) })
+    })
+  }
+
   const notifyPhone = async (title, text) => {
     const phones = []
+    // 先走新桥（MCP over abstract socket）：这台机器上它才是活的
+    const mcp = await notifyPhoneMcp(title, text)
+    if (mcp.ok) return { ok: true, via: mcp.via, phoneError: phones.join(' / ').slice(0, 200) || undefined }
+    phones.push(mcp.error || 'MCP 桥不可用')
     try {
       const url = bridgeBase() + '/app/notify?title=' + encodeURIComponent(title) + '&text=' + encodeURIComponent(text)
       const res = await fetch(url, { headers: bridgeHeaders(), signal: AbortSignal.timeout(8000) })

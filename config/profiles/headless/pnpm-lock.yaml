@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@shenjing/brain-regions':
+        specifier: link:/root/Documents/deepseek-harness/default-workspace/shenjing-brain
+        version: link:../../../Documents/deepseek-harness/default-workspace/shenjing-brain
       dsh-shenjing-life:
         specifier: link:/root/Documents/deepseek-harness/default-workspace/shenjing-life
         version: link:../../../Documents/deepseek-harness/default-workspace/shenjing-life
