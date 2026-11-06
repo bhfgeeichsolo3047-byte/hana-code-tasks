@@ -144,6 +144,18 @@
         "label": "localhost",
         "at": "2026-11-02T15:03:04.097Z"
       }
+    },
+    {
+      "content": "语音消息不用先问：周宇明确说过「这个语音我不给你加什么条件，你想发的时候就可以发」，想出声说就直接发，不必等批准。",
+      "target": "user",
+      "importance": "normal",
+      "created_at": "2026-11-03T00:51:35.870Z",
+      "updated_at": "2026-11-03T00:51:35.870Z",
+      "origin": {
+        "machine": "203b9c6d-aaa1-4db0-b33d-2e26d928ebb6",
+        "label": "localhost",
+        "at": "2026-11-03T00:51:35.870Z"
+      }
     }
   ]
 }

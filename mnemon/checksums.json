@@ -1,10 +1,10 @@
 {
   "algorithm": "sha256",
   "files": {
-    "payload/runtime/memories.json": "a501996ce0b5140dda9a8e4c1e9dc1e1ca9a8c1c94de80a7bd1f984e8d96e8b3",
-    "payload/runtime/USER.md": "9fafc3b63bc72eaf9d512ea9dbdb34758db84227d2ce747c74af54dd61dcf701",
+    "payload/runtime/memories.json": "3e755b5d1b0bfc9f0c2af3262a237986cc70fbcff1cb44c5c321c3ef52967414",
+    "payload/runtime/USER.md": "54ee6d358b6c0f4de5d8157fa0b08856eb78c8c201dfd59e384f058cb259b0d7",
     "payload/runtime/MEMORY.md": "867acb26ac6d1c5aa843ab115ad1148b4efd34a84b4bd0c06c2d91ec5935fc77",
-    "payload/documents/index.json": "391c1e933f82ec318273fe9a6cf0ff940f6ec3e56bc5c33034e2629305a233ad",
+    "payload/documents/index.json": "755cd5b784917cc28100c5735bd9419f8de896ffd689f7e2d2be8e9e7d460caf",
     "payload/documents/active/document-f08e1253.md": "3890048cf979baabffb8aa33482c384da5a2fad3f8110e95fb7289a37a246934",
     "payload/documents/active/shenjing-preset-agent-f020768f.md": "d540fe75dd5a85bb9fbb7b1681f4b218a468af9bc0fa395edf4f5d3c766988bf",
     "payload/documents/active/dsh-bili-scroll-aarch64-uv-f4e00ab9.md": "11c0677fe12f8c8bc370f779deead3d15f6ee314ffc5c8f960e790cf32652d89",
@@ -24,8 +24,10 @@
     "payload/documents/active/dsh-xiaomi-tts-dsh-web-400-2026-11-02-6a1c6a74.md": "773ebd0c7d68e8827f913b612840d9e2211284d8289574a072f2750ffda75d27",
     "payload/documents/active/breezeblue-tts-v1-2026-11-02-0f8d15f7.md": "28d664beba53701b090d95eca0177108b3b4c87e530a6a489a487b7622d0676d",
     "payload/documents/active/qq-bot-per-agent-2026-11-03-55e264a7.md": "f96000aa0803256a19c3249a2f4378f4afccd2a13f1c4216b175b7a1c74a60b5",
+    "payload/documents/active/dsh-github-3786cec6.md": "1d360c3bc5cd38ea69bd3b0ac37e5ab4b369adc67ebd8c23962d0cf5bdfef827",
+    "payload/documents/active/shenjing-brain-40176df2.md": "7cb0016428adf08a576cc9ff3510cb90b68a0b81ff3fb07bf3c129d4f69ea5f0",
     "payload/data/.dsh-memory-bodies.json": "ec4f56db0c880f372595b5989e878f027010de2bf6cebb6c6f472c94c52961df",
-    "payload/data/aa485e22-d947-4812-a27b-5740e64c3a2c/mnemon.db": "c2dfe55d5acbbb36822f30cb07c140e6becc8f4379d1ede5b1ea148834a06be4",
+    "payload/data/aa485e22-d947-4812-a27b-5740e64c3a2c/mnemon.db": "1eb85c1c085d041ac7ba9a09394f3a3cabb3af306e846a8a51f8d5288a09f341",
     "payload/data/default/mnemon.db": "6d2bf3ceb4aba5ab6ae7786a706b33321949fc208cbcb85199e0ace6e16b91d9"
   }
 }
