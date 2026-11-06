@@ -415,6 +415,105 @@ if (stRaw.day) {
 }
 writeFileSync(stateFilePath, JSON.stringify({ ...stRaw, proactiveToday: 0 }))
 
+/* ── 14. 保活心跳的自愈：真跑一遍"扶起来"，不只验"我记得它会扶" ─────────── */
+head('⑭ 保活心跳：宿主起来那一下会把掉掉的补上')
+// 11-05 21:30 写进 startTimer 的那段，之后一直没被走过：心跳自己活得好好的，
+// ensureKeepalive 每次都在"探活成功 ⇒ return"那行提前走掉。这跟 11-04 那句注释一个形状
+// —— 看起来在，其实一次都没跑过。所以这里自己造死心跳、造断档，让那条路真走几遍。
+const KEEP = join(ARCHIVE, 'keepalive')
+mkdirSync(KEEP, { recursive: true })
+const KEEP_SCRIPT = join(KEEP, 'heartbeat.cjs')
+// 沙箱版心跳：没有 HBNS_HOME 就自杀，绝不回退到真家目录（回退 = 自检写坏我的档案）
+writeFileSync(KEEP_SCRIPT, [
+  '#!/usr/bin/env node',
+  "'use strict'",
+  'const fs = require("fs")',
+  'const path = require("path")',
+  'const home = process.env.HBNS_HOME',
+  'if (!home) { console.error("HBNS_HOME missing"); process.exit(2) }',
+  'const out = path.join(home, "heartbeat.json")',
+  'const log = path.join(home, "logs", "heartbeat.jsonl")',
+  'fs.mkdirSync(path.dirname(log), { recursive: true })',
+  'function tick() {',
+  '  const now = new Date().toISOString()',
+  '  const s = { at: now, epochMs: Date.now(), pid: process.pid }',
+  '  try {',
+  '    fs.writeFileSync(out + ".tmp", JSON.stringify(s) + String.fromCharCode(10))',
+  '    fs.renameSync(out + ".tmp", out)',
+  '    fs.appendFileSync(log, JSON.stringify(s) + String.fromCharCode(10))',
+  '  } catch (e) { console.error(now + " heartbeat failed: " + e.message) }',
+  '}',
+  'tick()',
+  'setInterval(tick, 60000)',
+].join(NL), 'utf8')
+// ⚠️ 是 PLUGIN_HOME，不是 HOME —— 这里差一层，第一版就栽在这：假 ctx 的 dshHomePath 是
+//    join(HOME,'shenjing-life')，心跳却写到 HOME ⇒ 断言读不到，看起来像"补起来的那只没跳"。
+process.env.HBNS_HOME = PLUGIN_HOME
+
+const pidFile = join(PLUGIN_HOME, 'heartbeat.pid')
+const hbFile = join(PLUGIN_HOME, 'heartbeat.json')
+const gapsFile = join(PLUGIN_HOME, 'logs', 'heartbeat-gaps.log')
+const pluginLogFile = join(PLUGIN_HOME, 'plugin.log')
+const isAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+const readPid = () => { try { return Number(String(readFileSync(pidFile, 'utf8')).trim()) } catch { return NaN } }
+const gapsLines = () => { try { return readFileSync(gapsFile, 'utf8').split(NL).filter(Boolean) } catch { return [] } }
+// 只走 startTimer 那一下（不 tick、不 spawn headless）：每次起一块新表，立刻清掉
+const bootOnce = () => {
+  const seen = []
+  const ts = []
+  const c = { ...fakeCtx, tools: { register: (t) => { seen.push(t); return t } }, setInterval: (fn, ms) => { const t = setInterval(fn, ms); ts.push(t); return t } }
+  try { mod.apply(c, {}) } finally { for (const t of ts) { try { clearInterval(t) } catch { /* 已经停了 */ } } }
+  return seen
+}
+const killed = []
+const reap = async (pid) => { try { process.kill(pid, 'SIGTERM') } catch { /* 已经没了 */ } await waitFor(() => !isAlive(pid), 5000) }
+
+// ① 心跳死了 ⇒ 起来那一下必须补一只，并且断档照实记
+const OLD_PID = 999998
+writeFileSync(pidFile, String(OLD_PID), 'utf8')
+writeFileSync(hbFile, JSON.stringify({ at: new Date(Date.now() - 12 * 60000).toISOString(), pid: OLD_PID }), 'utf8')
+const gapsBefore = gapsLines().length
+bootOnce()
+await wait(600)
+const pid1 = readPid()
+if (pid1 > 0) killed.push(pid1)
+ok(pid1 > 0 && pid1 !== OLD_PID && isAlive(pid1), '心跳死了 ⇒ 重新拉起一只（新 pid=' + pid1 + '）')
+let hb1 = null
+try { hb1 = JSON.parse(readFileSync(hbFile, 'utf8')) } catch { hb1 = null }
+// ⚠️ 只比 pid1 不够：自愈被摘掉时 hbFile 还留着种子，pid1 也还是种子值 ⇒ 假绿。
+//    负例（11-06 08:05 验的）就是这么抓出来的：那句原来照样通过。
+ok(hb1?.pid === pid1 && hb1?.pid !== OLD_PID, '补起来的那只真在跳（heartbeat.json 里的 pid 对得上且换了人）', JSON.stringify(hb1))
+const g1 = gapsLines()
+const lastGap = g1[g1.length - 1] || ''
+ok(g1.length === gapsBefore + 1 && lastGap.includes('宿主启动时补起'), '断档照实写了一行：' + (lastGap || '(没有)'))
+ok(/断了 1[12] 分钟/.test(lastGap), '断了几分钟也算出来了（该是 12 分钟）', lastGap)
+ok(readFileSync(pluginLogFile, 'utf8').includes('保活心跳不在'), 'plugin.log 里留了「保活心跳不在…重新拉起」')
+
+// ② 心跳活着 ⇒ 不许重复起，也不许记一条假断档
+const gapsMid = gapsLines().length
+bootOnce()
+await wait(300)
+ok(readPid() === pid1 && isAlive(pid1) && gapsLines().length === gapsMid, '心跳活着 ⇒ 不重复起、不记假断档（pid 还是 ' + pid1 + '，且真的活着）')
+
+// ③ 再死一次 ⇒ 还会再补（不是"只认第一次"）
+await reap(pid1)
+bootOnce()
+await wait(600)
+const pid2 = readPid()
+if (pid2 > 0) killed.push(pid2)
+ok(pid2 > 0 && pid2 !== pid1 && isAlive(pid2), '再死一次 ⇒ 还会再补一只（新 pid=' + pid2 + '）')
+ok(gapsLines().length === gapsMid + 1, '第二次断档也记了（' + gapsMid + ' → ' + gapsLines().length + '）')
+
+// ④ 脚本不在 ⇒ 不抛错、不假装补过（换台机器没有 keepalive/ 时不该把插件带下去）
+try { rmSync(KEEP_SCRIPT, { force: true }) } catch { /* 删不掉就让下面那条红 */ }
+await reap(pid2)
+writeFileSync(pidFile, String(pid2), 'utf8')
+let bootThrew = null
+try { bootOnce() } catch (e) { bootThrew = e }
+ok(!bootThrew, 'keepalive/heartbeat.cjs 不在时 apply 不抛错', String(bootThrew?.message ?? bootThrew))
+
+for (const p of killed) { await reap(p) }
+
 /* ── 收尾 ────────────────────────────────────────────────────────────────── */
 for (const t of timers) { try { clearInterval(t) } catch { /* 已经停了 */ } }
 console.log(NL + '─'.repeat(66))

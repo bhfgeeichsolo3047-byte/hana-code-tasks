@@ -1,0 +1,104 @@
+{
+  "id": "dsh-bili-scroll-dm-backoff",
+  "plugin": "dsh-bili-scroll",
+  "targetVersion": "2.4.0",
+  "madeAt": "2026-11-06",
+  "why": "私信检查每分钟撞一次 -509（请求过于频繁），撞得越勤退得越久：11-03 那天 12:04–21:29 共 32 次，一整天回不了一条私信，而日志里只有一行「私信监查出错（已兜住）」。这一版：-509 当退避信号（2→4→8→16→30 分钟封顶），成功一次立刻复位；连败 6 次往 open_loops.md 写一条账（6 小时内不重复），别再指望有人去翻日志。",
+  "onConflict": "旧补丁 dsh-bili-scroll 的锚点已被改掉，所以本补丁单独一个目录、锚点全部落在旧补丁的输出上；顺序按目录名排序 ⇒ 新机器上先装旧补丁再装这条。",
+  "copy": [
+    {
+      "from": "files/lib/dm-backoff.mjs",
+      "to": "lib/dm-backoff.mjs"
+    }
+  ],
+  "edits": [
+    {
+      "mode": "insertAfter",
+      "file": "index.js",
+      "contains": "import { planWindow, DEFAULT_MAX_ATTEMPTS } from './lib/window-plan.mjs'",
+      "insertLines": [
+        "// ⭐ 深鲸补丁（2026-11-06 中午）：私信被限流时的退避判定（纯函数，patches/dsh-bili-scroll-dm-backoff/test-dm-backoff.mjs 覆盖）",
+        "import { dmBackoffDue, nextDmBackoff, resetDmBackoff, emptyDmBackoff, dmAlarmLine } from './lib/dm-backoff.mjs'"
+      ]
+    },
+    {
+      "mode": "insertAfter",
+      "file": "index.js",
+      "contains": "const readJsonFile = (f, dflt) =>",
+      "insertLines": [
+        "  // ⭐ 深鲸补丁（2026-11-06 中午）：退避状态落盘 —— 宿主重启不该把「刚被限流」这件事忘掉",
+        "  const dmBackoffFile = join(stateDir, 'dm-backoff.json')",
+        "  let dmBackoff = null",
+        "  const loadDmBackoff = () => {",
+        "    const s = readJsonFile(dmBackoffFile, null)",
+        "    return s && typeof s === 'object' ? s : emptyDmBackoff()",
+        "  }",
+        "  // 连败到阈值 ⇒ 往 open_loops.md 记一条（日志会被埋，账本不会）；找不到档案就退到家里的小日志",
+        "  const appendDmAlarm = (state) => {",
+        "    const line = dmAlarmLine(state)",
+        "    const home = process.env.HOME || ''",
+        "    const cands = [process.env.SHENJING_ARCHIVE, join(home, 'Documents', 'deepseek-harness', 'default-workspace', 'shenjing')].filter(Boolean)",
+        "    for (const dir of cands) {",
+        "      const p = join(dir, 'open_loops.md')",
+        "      try {",
+        "        if (!existsSync(p)) continue",
+        "        const old = readFileSync(p, 'utf8')",
+        "        appendFileSync(p, (old.endsWith('\\n') ? '' : '\\n') + line + '\\n', 'utf8')",
+        "        return",
+        "      } catch { /* 换下一个候选 */ }",
+        "    }",
+        "    try { appendFileSync(join(stateDir, 'dm-alarms.log'), line + '\\n', 'utf8') } catch { /* 兜底失败就算了 */ }",
+        "  }"
+      ]
+    },
+    {
+      "mode": "insertBefore",
+      "file": "index.js",
+      "contains": "// ⭐ 2026-10-21：同一台机器上可能有两个宿主（桌面版 + web 版）都装着这个插件，",
+      "insertLines": [
+        "      // ⭐ 深鲸补丁（2026-11-06 中午）：退避中就不发请求 —— 撞得越勤，退得越久",
+        "      //    ⚠️ 必须在这个 try 里面：return 要走 finally 把 dmBusy 放掉，否则退避一次等于把私信监听永久掐死",
+        "      if (!dmBackoffDue(dmBackoff || (dmBackoff = loadDmBackoff()), Date.now())) return"
+      ]
+    },
+    {
+      "mode": "insertAfter",
+      "file": "index.js",
+      "contains": "const sess = await dmList(cred)",
+      "insertLines": [
+        "      // ⭐ 深鲸补丁（2026-11-06 中午）：这一跳通了 ⇒ 连败清零（别把一次偶发错误变成半天静音）",
+        "      if (dmBackoff && Number(dmBackoff.fails) > 0) {",
+        "        log(`私信监听：通了，退避复位（之前连败 ${dmBackoff.fails} 次，${dmBackoff.kind || 'unknown'}）`)",
+        "        dmBackoff = resetDmBackoff()",
+        "        writeJsonFile(dmBackoffFile, dmBackoff)",
+        "      }"
+      ]
+    },
+    {
+      "mode": "replaceLine",
+      "file": "index.js",
+      "contains": "log('私信监查出错（已兜住）：' + String(e?.message ?? e))",
+      "newText": "      const dmErrMsg = String(e?.message ?? e)\n      // ⭐ 深鲸补丁（2026-11-06 中午）：出错要留账 —— 原来只写一句「已兜住」，一整天 32 条，谁也没看见\n      try {\n        const r = nextDmBackoff(dmBackoff || (dmBackoff = loadDmBackoff()), dmErrMsg, Date.now())\n        dmBackoff = r.state\n        writeJsonFile(dmBackoffFile, dmBackoff)\n        log(`私信监查出错（已兜住）：${dmErrMsg} ⇒ 退避 ${Math.max(1, Math.round(r.waitMs / 60000))} 分钟（连败 ${r.fails} 次）`)\n        if (r.alarm) appendDmAlarm(r.state)\n      } catch (e2) {\n        log('私信监查出错（已兜住）：' + dmErrMsg)\n      }"
+    }
+  ],
+  "markers": [
+    {
+      "file": "index.js",
+      "must": [
+        "dmBackoffDue(dmBackoff",
+        "nextDmBackoff(dmBackoff",
+        "appendDmAlarm(r.state)",
+        "dm-backoff.json",
+        "退避复位"
+      ]
+    },
+    {
+      "file": "lib/dm-backoff.mjs",
+      "must": [
+        "export function nextDmBackoff",
+        "export function dmAlarmLine",
+        "alarmAfter"
+      ]
+    }
+  ]
+}

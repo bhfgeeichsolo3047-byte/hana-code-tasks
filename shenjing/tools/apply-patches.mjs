@@ -93,7 +93,11 @@ function applyEdit(pluginDir, e) {
     const line = ls[i]
     const m = line.match(/^(\s*)/)
     const indent = m ? m[1] : ''
-    ls[i] = indent + e.pre + line.slice(indent.length) + e.post
+    // ⚠️ 2026-11-06：CRLF 文件里这一行末尾带 \r，直接拼 post 会变成 `…UID')\r }`
+    //    （一行里混进一个回车，跑起来没事，diff 一片红）。把 \r 摘下来放回行尾。
+    const tailCr = line.endsWith('\r') ? '\r' : ''
+    const body = tailCr ? line.slice(0, -1) : line
+    ls[i] = indent + e.pre + body.slice(indent.length) + e.post + tailCr
   } else {
     throw new Error(`不认识的 mode: ${e.mode}`)
   }

@@ -287,6 +287,14 @@ MECHANISM_CHECKS = [
      ["export function planWindow", "exhausted"]),
     ("私信监听那句提示只说一次（原来每 60 秒一行，两天 3300 行把 code=1 埋了）",
      "profiles/web/node_modules/dsh-bili-scroll/index.js", ["dmSaidSelfOnly"]),
+    # 2026-11-06 中午加：-509（请求过于频繁）每分钟一撞，越撞退得越久，一整天回不了一条私信，
+    # 而日志里只有「已兜住」。补丁要做两件事：退避 + 连败记账（只写日志等于没人知道）。
+    ("私信被限流要退避（-509 之后间隔 2→4→…→30 分钟，通了立刻复位），连败 6 次要写进 open_loops",
+     "profiles/web/node_modules/dsh-bili-scroll/index.js",
+     ["dmBackoffDue(dmBackoff", "nextDmBackoff(dmBackoff", "appendDmAlarm(r.state)", "退避复位"]),
+    ("上面那条的退避判定本身（补丁自带的新文件，升级会一起删掉）",
+     "profiles/web/node_modules/dsh-bili-scroll/lib/dm-backoff.mjs",
+     ["export function nextDmBackoff", "export function dmAlarmLine", "alarmAfter"]),
 ]
 
 
