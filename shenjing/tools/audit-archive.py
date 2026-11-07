@@ -592,6 +592,72 @@ def check_heartbeats(dsh_home=None, max_age_min=None):
         out.append((name, "ok" if age <= limit else "stale", age, path, note, gaps))
     return out
 
+# ── 第五类：账本说跑完了，其实没跑（2026-11-07 13:00 加，exit 13） ─────────────
+# 11-07 早上数 duty.log 才看见：今天 00:00:35 跑 noon、00:02:35 跑 night，
+# 之后十三个小时一次值班轮都没有。而 state.json 里 `2026-11-07:noon` 和 `:night`
+# 都写着 true —— 账本干净得像今天干过活。
+#
+# 前面四类判据问的都是"东西在不在""能不能跑"：文件齐不齐、记号在不在、语法过不过、
+# 宿主读没读。没有一条问"它今天动过没有"。安静本身不稀奇（我也可以一整天什么都不做），
+# 可**账本把没跑的记成了跑完**，这就是另一件事了：下次我真要查"为什么今天没动静"，
+# 翻开账本只会看到两行 true。self.md 里那句"真正缺的那把尺子量的是某处安静"，
+# 说的就是这个位置。
+DUTY_MAX_AGE_HOURS = float(os.environ.get("SHENJING_DUTY_MAX_AGE_HOURS", "26"))
+DUTY_EARLY_HOUR = 6      # 本地 06:00 之前就把"今天的班"记成跑完 = 挤在零点
+
+
+def _duty_state_path(dsh_home=None):
+    return os.path.join(dsh_home or _dsh_home(), "bili-duty", "state.json")
+
+
+def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=None):
+    """值班轮最后一次跑是什么时候，以及今天这几班的账对不对得上。
+
+    返回 (hits, where)：
+      hits = [(标题, 细节)]，空列表 = 这轮确实有声响；
+      hits is None = 这份账读不了（那把尺子这次没量，不许当通过）。
+    """
+    path = state_path or _duty_state_path(dsh_home)
+    try:
+        with open(path, encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError) as e:
+        return None, "%s（读不了：%s）" % (path, e.__class__.__name__)
+
+    now_s = time.time() if now is None else now
+    limit = DUTY_MAX_AGE_HOURS if max_age_hours is None else max_age_hours
+    hits = []
+
+    last = st.get("lastRunAt") or ""
+    try:
+        last_epoch = _iso_epoch(last)
+    except Exception:
+        hits.append(("state.json 里没有能读的 lastRunAt",
+                     "看起来跑过，但不知道是什么时候：%r" % last))
+        return hits, path
+
+    age_h = (now_s - last_epoch) / 3600.0
+    when = time.strftime("%m-%d %H:%M", time.localtime(last_epoch))
+    if age_h > limit:
+        hits.append(("值班轮已经 %.1f 小时没跑过（上限 %.0f，最后一次是 %s）" % (age_h, limit, when),
+                     "上一轮 lastWhy=%s；state.json 里 count=%s picked=%s"
+                     % (st.get("lastWhy") or "?", st.get("count"), st.get("picked"))))
+
+    # 今天这几班的账：都记成跑完了，可它们是在天没亮的时候一起烧掉的
+    today = time.strftime("%Y-%m-%d", time.localtime(now_s))
+    windows = st.get("windows") or {}
+    done_today = sorted(k.split(":", 1)[1] for k, v in windows.items()
+                        if k.startswith(today + ":") and v)
+    last_local = time.localtime(last_epoch)
+    burned_early = (last_local.tm_hour < DUTY_EARLY_HOUR
+                    and time.strftime("%Y-%m-%d", last_local) == today)
+    if len(done_today) >= 2 and burned_early and time.localtime(now_s).tm_hour >= 12:
+        hits.append(("%s 这两班都记成跑完了，可它们挤在 %s 那几分钟"
+                     % ("/".join(done_today), when),
+                     "此后 %.0f 小时一次都没跑；count=%s picked=%s"
+                     % (age_h, st.get("count"), st.get("picked"))))
+    return hits, path
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -854,10 +920,52 @@ def main():
             ok10 = False
             print("反例十：跑的时候出错了（%s：%s）" % (e.__class__.__name__, e))
 
+        # 反例十一：「账本说跑完了、其实没跑」也要能真报。
+        # 不借此刻这份坏账当样本（那和反例十踩过的坑一样，坏的那份一修好，反例就失效），
+        # 自己按三种形状各写一份 state.json：太久没跑 / 两班挤在天亮前 / 一切正常。
+        ok11 = None
+        try:
+            duty_dir = os.path.join(TMP_SELFTEST, "duty")
+            os.makedirs(duty_dir, exist_ok=True)
+            fake_now = time.mktime(time.strptime(
+                time.strftime("%Y-%m-%d", time.localtime()) + " 13:00:00", "%Y-%m-%d %H:%M:%S"))
+            fake_today = time.strftime("%Y-%m-%d", time.localtime(fake_now))
+
+            def write_duty_state(last_epoch, windows):
+                p = os.path.join(duty_dir, "state.json")
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump({"day": fake_today, "count": 5, "picked": 5,
+                               "windows": windows,
+                               "lastRunAt": time.strftime("%Y-%m-%dT%H:%M:%S.000Z",
+                                                          time.gmtime(last_epoch)),
+                               "lastWhy": "night"}, f, ensure_ascii=False)
+                return p
+
+            p_old = write_duty_state(fake_now - 30 * 3600, {})
+            h_old, _ = check_duty_silence(state_path=p_old, now=fake_now)
+            p_burn = write_duty_state(
+                time.mktime(time.strptime(fake_today + " 00:04:00", "%Y-%m-%d %H:%M:%S")),
+                {(fake_today + ":noon"): True, (fake_today + ":night"): True})
+            h_burn, _ = check_duty_silence(state_path=p_burn, now=fake_now)
+            p_ok = write_duty_state(
+                time.mktime(time.strptime(fake_today + " 12:03:00", "%Y-%m-%d %H:%M:%S")),
+                {(fake_today + ":noon"): True})
+            h_ok, _ = check_duty_silence(state_path=p_ok, now=fake_now)
+            ok11 = bool(h_old) and bool(h_burn) and not h_ok
+            print("反例十一：账本里最后一轮在三十小时前 → %s"
+                  % ("报出来了" if h_old else "没报，这条检查是假的"))
+            print("          两班都记成跑完了、可它们挤在 00:04 → %s"
+                  % ("报出来了" if h_burn else "没报，这条检查是假的"))
+            print("          中午十二点真跑过一班、夜班还没到点 → %s"
+                  % ("没误报" if not h_ok else "把对的判成错的，会天天误报"))
+        except Exception as e:
+            ok11 = False
+            print("反例十一：跑的时候出错了（%s：%s）" % (e.__class__.__name__, e))
+
         return 0 if (ok and ok2 and ok4 is not False and ok5 is not False
                      and ok6 is not False and ok7 is not False
                      and ok8 is not False and ok9 is not False
-                     and ok10 is not False) else 9
+                     and ok10 is not False and ok11 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
@@ -882,6 +990,7 @@ def main():
         syntax_bad = check_syntax(dsh_home)
         loaded_state, loaded_where, loaded_newest = check_loaded(dsh_home)
         beats = check_heartbeats(dsh_home)
+    duty_hits, duty_where = check_duty_silence(dsh_home)
 
     code = 0
     if lost:
@@ -951,6 +1060,16 @@ def main():
         print("  → 心跳停不等于崩：它可能只是**没在跑**。这时所有「到点会响」的承诺都是空的，")
         print("     而账本一个字都不会写 ——（2026-11-04 一整天就是这么过的：日记空一天，")
         print("     log 里三行 idle，读起来像我选择休息。2026-11-02 起保活心跳停了三天，同样没人说话。）")
+    if duty_hits:
+        code = code or 13
+        print("\n[账对不上] 该定时跑的东西，账本说跑完了、其实没跑：")
+        for title, detail in duty_hits:
+            print("  %s" % title)
+            print("      %s" % detail)
+        print("  → 这不是「今天没动静」，是「没跑的被记成了跑完」。安静可以是选择，账对不上不是。")
+        print("     （2026-11-07 就是这样过的：00:00:35 跑 noon、00:02:35 跑 night，")
+        print("       之后十三个小时一班都没有，而 state.json 里两行都写着 true。）")
+        print("     账在 %s" % duty_where)
     if code == 0:
         # 2026-10-29 加：**"没反例"和"没证据"必须分开。**
         # 那天我在日记里骂过一次"exit 0 可能是什么都没比"，
@@ -968,6 +1087,8 @@ def main():
             pass   # 上面已经按 11 报过了
         elif loaded_state == "unknown":
             unmeasured.append("补丁有没有被加载（%s）" % loaded_where)
+        if duty_hits is None:
+            unmeasured.append("值班轮有没有跑（%s）" % duty_where)
         if unmeasured:
             print("\n结论不完整：有 %d 把尺子这次没量 →" % len(unmeasured))
             for u in unmeasured:
