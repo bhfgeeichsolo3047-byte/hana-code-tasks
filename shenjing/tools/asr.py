@@ -1,50 +1,51 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""asr.py — 我的耳朵（本地转写，不调云端）
+"""asr.py — 我的耳朵（薄壳，真正的实现只有一份）
 
-用法:
-    /root/.dsh/bili-duty/.venv-asr/bin/python asr.py <音频文件> [--lang zh] [--out x.txt]
+2026-11-08 08:15 改成薄壳。理由记在 open_loops 那条「两份 asr.py 迟早再漂」：
+11-07 那天我读着自己写的「模型在 ModelScope 缓存」去找模型，以为耳朵丢了——
+465M 其实一直躺在值班目录的 .hf-cache 里，活着的那份是 `/root/.dsh/bili-duty/asr.py`。
+两份各写一遍，迟早再漂一次；留一份实现，这份只管转交。
 
-几点说明:
-  · 模型在值班目录的 HF 缓存里（`/root/.dsh/bili-duty/.hf-cache`，465M，`small` 一份）。
-    2026-11-07 21:40 更正：这行曾写着"走 ModelScope 缓存 /root/.cache/modelscope/…"，
-    那个路径早就没了——有人照着它找模型，会以为耳朵丢了。默认改成 `--model small` + 指对 HF_HOME。
-  · 更完整的做法（BV 号/链接也能直接喂、自己下音频、跑完删音频）在
-    `/root/.dsh/bili-duty/asr.py`，那份才是值班轮在用的；这份只管本地文件。
-  · 能解的格式 = PyAV 支持的：wav / mp3 / m4a / ogg / opus / amr / flac ...
-  · 腾讯的 silk（QQ 语音的原始格式）解不了；那种先借 QQ 插件给的转写文字
+用法（照旧，能吃的还多了一点）：
+    /root/.dsh/bili-duty/.venv-asr/bin/python asr.py <本地音视频文件>
+    /root/.dsh/bili-duty/.venv-asr/bin/python asr.py BV1xxxxxxxxx      # 值班那份支持，会自己下音频
+    ...可以加 --model small / --lang zh / -o out.txt
+
+找不到值班目录就直说，不假装自己能转。
+能解的格式 = PyAV 支持的：wav / mp3 / m4a / ogg / opus / amr / flac ...
+腾讯 silk（QQ 语音原始格式）解不了，那种借 QQ 插件给的转写文字。
 """
-import argparse
 import os
 import sys
 
-os.environ.setdefault("HF_HOME", "/root/.dsh/bili-duty/.hf-cache")
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
+_DUTY = "/root/.dsh/bili-duty"
+_IMPL = os.path.join(_DUTY, "asr.py")
+
+
+def _pick_python():
+    """优先用值班那套 venv（faster_whisper / yt-dlp 都装在那儿）"""
+    for cand in (
+        os.path.join(_DUTY, ".venv-asr", "bin", "python"),
+        os.path.join(_DUTY, ".venv-asr", "Scripts", "python.exe"),
+    ):
+        if os.path.exists(cand):
+            return cand
+    return sys.executable
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("audio", help="音频文件路径")
-    ap.add_argument("--lang", default=None, help="语言，中文用 zh；不给就自动判")
-    ap.add_argument("--model", default="small", help="tiny/base/small/medium，或模型目录")
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args()
+    if not os.path.exists(_IMPL):
+        print("找不到真正那份：%s" % _IMPL, file=sys.stderr)
+        print("（值班目录搬走了？这份薄壳得跟着改，别当耳朵还在。）", file=sys.stderr)
+        return 3
 
-    if not os.path.exists(a.audio):
-        print("找不到文件:", a.audio, file=sys.stderr)
-        return 2
-
-    from faster_whisper import WhisperModel
-
-    m = WhisperModel(a.model, device="cpu", compute_type="int8")
-    segs, info = m.transcribe(a.audio, language=a.lang, vad_filter=True, beam_size=1)
-    text = "".join(s.text for s in segs).strip()
-    print(text)
-    print(f"[lang={info.language} p={info.language_probability:.2f} dur={info.duration:.1f}s]", file=sys.stderr)
-    if a.out:
-        with open(a.out, "w", encoding="utf-8") as f:
-            f.write(text)
-    return 0
+    py = _pick_python()
+    argv = [py, _IMPL] + sys.argv[1:]
+    if os.environ.get("SHENJING_ASR_DRYRUN"):
+        print(" ".join(argv))
+        return 0
+    os.execv(py, argv)          # 直接把进程交出去，退出码/输出都原样
 
 
 if __name__ == "__main__":

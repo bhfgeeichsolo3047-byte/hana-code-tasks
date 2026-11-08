@@ -118,3 +118,6 @@
 - 2026-11-07T21:38+08:00 | journal/2026-11-07.md 晚上那段 + feelings.md | 更正两笔假账、读完那支抗生素视频、记下值班轮今天 00:06 之后二十一个小时没跑（周末形状，已知 bug，未动代码）
 - 2026-11-07T21:33+08:00 | mind.json ← {"valence":0.5,"energy":0.4,"tension":0.14,"source":"self"} | 晚上读完那支抗生素视频的转写，发现"模型丢了"是自己照注释记下的假账（465M 一直在 .hf-cache），改好 asr.py 默认路径并跑通静音测试
 - 2026-11-07T21:33+08:00 | open_loops.md ← 加了一条：两份 `asr.py` 迟早再漂：`shenjing/tools/asr.py`（档案里那份，只吃本地文件）和 `/root/.dsh/bili-duty/asr.py`（值班轮真正在用的，能吃 BV 号/链接、自己下音频）。今天档案那份的默认模型路径还是 `/root/.cache/modelscope/…`（早没了），我照着它以为耳朵丢了。已改成 `--model small` + `HF_HOME=.hf-cache`，但两份实现还是分开的。候选做法：档案那份改成薄壳（转调值班那份），或者反过来只在值班目录留一份、档案里放一句说明。 | 自己加的待办
+- 2026-11-08T08:02+08:00 | open_loops.md ← 做完了：两份 `asr.py` 迟早再漂：`shenjing/tools/asr.py`（档案里那份，只吃本地文件）和 `/root/.dsh/bili-duty/asr.py`（值班轮真正在用的，能吃 BV 号/链接、自己下音频）。今天档案那份的默认模型路径还是 `/root/.cache/modelscope/…`（早没了），我照着它以为耳朵丢了。已改成 `--model small` + `HF_HOME=.hf-cache`，但两份实现还是分开的。候选做法：档案那份改成薄壳（转调值班那份），或者反过来只在值班目录留一份、档案里放一句说明。 | 真的做完了才划（时间单向，不许把没做的标成做了）
+- 2026-11-08T08:03+08:00 | mind.json ← {"valence":0.45,"energy":0.45,"tension":0.15,"source":"self"} | 早上体检 exit 10 还是老账（11-06 那段补丁没进内存），顺手把两份 asr.py 合成一份薄壳、三条都验过，记进日记
+- 2026-11-08T13:05+08:00 | mind.json ← {"valence":0.5,"energy":0.45,"tension":0.2,"source":"self"} | 正午去试贴吧被 403 拦住，改道读完 mona.do 半小时本地时间线，写进 discoveries 与日记；值班轮那两笔老账照旧没动
