@@ -285,6 +285,17 @@ MECHANISM_CHECKS = [
     ("上面那条的判定函数本身（补丁自带的新文件，升级会一起删掉）",
      "profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs",
      ["export function planWindow", "exhausted"]),
+    # 2026-11-09 13:00 加。同一个文件上的第三处，也是最贵的一处：
+    # 夜班窗口 18:00–09:00 跨零点，账本键原来按开跑那一刻的日历日 ⇒ 00:00 那一跳吃的是
+    # 昨天的剩菜，却把「今天夜班」记成 done，当晚 18:00 看见已完成就跳过（九天里夜班
+    # 只剩凌晨那一班，而账本读起来是干净的）。改：跨零点的窗口落在 end 之前算前一夜；
+    # 天翻页清账改成只剪不擦。补丁在 patches/dsh-bili-scroll-window-key/。
+    ("夜班的账按『哪一夜』记，不按开跑那一刻的日历日",
+     "profiles/web/node_modules/dsh-bili-scroll/index.js",
+     ["windowKeyFor(k, WINDOWS[k], now)", "pruneWindows(st.windows, today)"]),
+    ("上面那条的判定本身（补丁自带的新文件，升级会一起删掉）",
+     "profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs",
+     ["export function windowKeyFor", "export function pruneWindows"]),
     ("私信监听那句提示只说一次（原来每 60 秒一行，两天 3300 行把 code=1 埋了）",
      "profiles/web/node_modules/dsh-bili-scroll/index.js", ["dmSaidSelfOnly"]),
     # 2026-11-06 中午加：-509（请求过于频繁）每分钟一撞，越撞退得越久，一整天回不了一条私信，
@@ -610,7 +621,46 @@ def _duty_state_path(dsh_home=None):
     return os.path.join(dsh_home or _dsh_home(), "bili-duty", "state.json")
 
 
-def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=None):
+def _duty_log_path(dsh_home=None):
+    return (os.environ.get("DSH_BILI_DUTY_LOG")
+            or os.path.join(dsh_home or _dsh_home(), "bili-duty", "duty.log"))
+
+
+# 2026-11-09 08:00 补的一条（第六把尺子的补丁）：
+# 昨天那条判据只认"两班都挤在天亮前"这一种形状 —— 可工作日里夜班照样在 00:0x 烧掉，
+# 中午那班还老老实实在 12:00 跑，于是账本看上去是干净的，exit 13 一声不响。
+# 数了 duty.log：11-05、11-06、11-07、11-08、11-09 的 window:night **每一次**都在
+# 本地 00:00–00:03 开跑，一次没等到 18:00。夜班窗口本来就写着 18:00–09:00，
+# 零点跑在规矩里；问题在 18:00 那跳会看到"今天夜班已完成"直接跳过 ⇒ 事实上的夜班
+# 永远是凌晨那班，而账上写的是"今天已完成"。
+# 旧判据看不见这一种，因为它心里想的是周末那次翻车。
+def _duty_night_starts(log_path):
+    """从 duty.log 里捞「刷B站开跑（window:night）」的时刻（epoch，本地含义）。
+
+    读不到返回 None —— 那是"没量"，不许当成"没问题"。
+    """
+    try:
+        with open(log_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 4 * 1024 * 1024))
+            text = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    out = []
+    for line in text.splitlines():
+        if "刷B站开跑（window:night" not in line:
+            continue
+        ts = line.split(None, 1)[0] if line.strip() else ""
+        try:
+            out.append(_iso_epoch(ts))
+        except Exception:
+            continue
+    return out
+
+
+def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=None,
+                       log_path=None):
     """值班轮最后一次跑是什么时候，以及今天这几班的账对不对得上。
 
     返回 (hits, where)：
@@ -656,6 +706,27 @@ def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=N
                      % ("/".join(done_today), when),
                      "此后 %.0f 小时一次都没跑；count=%s picked=%s"
                      % (age_h, st.get("count"), st.get("picked"))))
+
+    # 夜班是不是又在零点烧掉了（2026-11-09 加：上面那条只认周末那次形状）
+    starts = _duty_night_starts(log_path or _duty_log_path(dsh_home))
+    if starts:
+        by_day = {}
+        for e in starts:
+            by_day.setdefault(time.strftime("%Y-%m-%d", time.localtime(e)), []).append(e)
+        early_days = [d for d, es in sorted(by_day.items())
+                      if all(time.localtime(e).tm_hour < DUTY_EARLY_HOUR for e in es)]
+        latest = max(starts)
+        latest_h = time.localtime(latest).tm_hour
+        if latest_h < DUTY_EARLY_HOUR and len(early_days) >= 2:
+            hits.append(("夜班又在零点烧掉了：最近一次 window:night 开跑是 %s，翻得到账的 %d 天全是天亮前"
+                         % (time.strftime("%m-%d %H:%M", time.localtime(latest)), len(early_days)),
+                         "夜班窗口写的是 18:00–09:00，零点跑在窗口里；可 state.json 一早就把 "
+                         "`%s:night` 记成 true，18:00 那一跳看到『今天这班跑过了』直接跳过 ⇒ "
+                         "夜班事实上只剩凌晨那一班，而且它看的是前一天的剩余内容。"
+                         % time.strftime("%Y-%m-%d", time.localtime(latest))))
+    elif starts is None:
+        hits.append(("duty.log 读不了，夜班到底在几点跑，这次没量",
+                     "%s —— 没量不等于没问题" % (log_path or _duty_log_path(dsh_home))))
     return hits, path
 
 
@@ -924,6 +995,7 @@ def main():
         # 不借此刻这份坏账当样本（那和反例十踩过的坑一样，坏的那份一修好，反例就失效），
         # 自己按三种形状各写一份 state.json：太久没跑 / 两班挤在天亮前 / 一切正常。
         ok11 = None
+        ok12 = None
         try:
             duty_dir = os.path.join(TMP_SELFTEST, "duty")
             os.makedirs(duty_dir, exist_ok=True)
@@ -941,16 +1013,38 @@ def main():
                                "lastWhy": "night"}, f, ensure_ascii=False)
                 return p
 
+            def write_duty_log(name, night_starts):
+                """自己造一份 duty.log。行格式照抄真的（UTC 带 Z + 那句开跑）。"""
+                p = os.path.join(duty_dir, name)
+                with open(p, "w", encoding="utf-8") as f:
+                    for e in night_starts:
+                        f.write("%s  刷B站开跑（window:night）：node …  cwd=/root/.dsh/bili-duty\n"
+                                % (time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(e)) + ".000Z"))
+                    f.write("%s  私信监查出错（已兜住）：HTTP 200 code=-509\n"
+                            % (time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(fake_now - 600)) + ".000Z"))
+                return p
+
+            def local_at(day_offset, hms):
+                d = time.strftime("%Y-%m-%d", time.localtime(fake_now - day_offset * 86400))
+                return time.mktime(time.strptime("%s %s" % (d, hms), "%Y-%m-%d %H:%M:%S"))
+
+            log_early = write_duty_log("duty-early.log",
+                                       [local_at(1, "00:03:00"), local_at(2, "00:01:00"),
+                                        local_at(3, "00:02:00")])
+            log_evening = write_duty_log("duty-evening.log",
+                                         [local_at(1, "18:40:00"), local_at(2, "18:31:00"),
+                                          local_at(3, "19:02:00")])
+
             p_old = write_duty_state(fake_now - 30 * 3600, {})
-            h_old, _ = check_duty_silence(state_path=p_old, now=fake_now)
+            h_old, _ = check_duty_silence(state_path=p_old, now=fake_now, log_path=log_evening)
             p_burn = write_duty_state(
                 time.mktime(time.strptime(fake_today + " 00:04:00", "%Y-%m-%d %H:%M:%S")),
                 {(fake_today + ":noon"): True, (fake_today + ":night"): True})
-            h_burn, _ = check_duty_silence(state_path=p_burn, now=fake_now)
+            h_burn, _ = check_duty_silence(state_path=p_burn, now=fake_now, log_path=log_early)
             p_ok = write_duty_state(
                 time.mktime(time.strptime(fake_today + " 12:03:00", "%Y-%m-%d %H:%M:%S")),
                 {(fake_today + ":noon"): True})
-            h_ok, _ = check_duty_silence(state_path=p_ok, now=fake_now)
+            h_ok, _ = check_duty_silence(state_path=p_ok, now=fake_now, log_path=log_evening)
             ok11 = bool(h_old) and bool(h_burn) and not h_ok
             print("反例十一：账本里最后一轮在三十小时前 → %s"
                   % ("报出来了" if h_old else "没报，这条检查是假的"))
@@ -958,6 +1052,22 @@ def main():
                   % ("报出来了" if h_burn else "没报，这条检查是假的"))
             print("          中午十二点真跑过一班、夜班还没到点 → %s"
                   % ("没误报" if not h_ok else "把对的判成错的，会天天误报"))
+
+            # 反例十二：夜班连续几天都在天亮前开跑 —— 旧那条（只认"两班挤一起"）看不见它。
+            # 账本装得像正常的一天：中午 12:03 跑过一班，夜班还是 pending。
+            # 只看 state.json 的话它干净；看 duty.log 才看得见夜班其实每次都在 00:0x 烧掉。
+            p_clean = write_duty_state(
+                time.mktime(time.strptime(fake_today + " 12:03:00", "%Y-%m-%d %H:%M:%S")),
+                {(fake_today + ":noon"): True})
+            h_night_early, _ = check_duty_silence(state_path=p_clean, now=fake_now,
+                                                 log_path=log_early)
+            h_night_evening, _ = check_duty_silence(state_path=p_clean, now=fake_now,
+                                                   log_path=log_evening)
+            ok12 = bool(h_night_early) and not h_night_evening
+            print("反例十二：账本干净、可夜班连着三天都在 00:0x 开跑 → %s"
+                  % ("报出来了" if h_night_early else "没报，零点烧夜班这条尺子是假的"))
+            print("          同一份账、夜班都在 18:30 之后开跑 → %s"
+                  % ("没误报" if not h_night_evening else "把对的判成错的，会天天误报"))
         except Exception as e:
             ok11 = False
             print("反例十一：跑的时候出错了（%s：%s）" % (e.__class__.__name__, e))
@@ -965,7 +1075,8 @@ def main():
         return 0 if (ok and ok2 and ok4 is not False and ok5 is not False
                      and ok6 is not False and ok7 is not False
                      and ok8 is not False and ok9 is not False
-                     and ok10 is not False and ok11 is not False) else 9
+                     and ok10 is not False and ok11 is not False
+                     and ok12 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
