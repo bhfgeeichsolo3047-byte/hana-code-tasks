@@ -272,41 +272,80 @@ MECHANISM_CHECKS = [
     ("推之前只许加不许删：本地没有的文件留在仓库里，同名分叉的先存副本",
      "life-sync/run.sh", ["_diverged", "KEEP=", "FORKED", "cmp -s"]),
 
-    # ── 第三类：我给别人的插件打的补丁（2026-11-03 08:00 加）─────────────────
-    # 这一类和上面两类是同一个病，但丢法更恶劣：**不是有人手滑，是升级把目录整个换掉。**
-    # 11-02 我改了 node_modules/dsh-bili-scroll/index.js 三处（失败不许记成跑过 / 私信那句去重）。
-    # 11-03 凌晨 01:44 插件自动升到 2.4.0 ⇒ 三处一句不剩，连 lib/state.mjs 都退回原版，
-    # 而升级不会告诉任何人「你的补丁没了」。当天早上 08:00 醒来，账本上什么痕迹都没有。
-    # ⇒ 补丁的真相放在 shenjing/patches/（进备份），这里只盯着"它有没有被装回去"。
-    #   装：node shenjing/tools/apply-patches.mjs
-    ("值班轮失败不许记成『跑过了』（我 11-02 打的补丁，只活在 node_modules 里 ⇒ 升级就没了）",
-     "profiles/web/node_modules/dsh-bili-scroll/index.js",
-     ["planWindow(st, key, now)", "这一班没跑成", "windowAttempts"]),
-    ("上面那条的判定函数本身（补丁自带的新文件，升级会一起删掉）",
-     "profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs",
-     ["export function planWindow", "exhausted"]),
-    # 2026-11-09 13:00 加。同一个文件上的第三处，也是最贵的一处：
-    # 夜班窗口 18:00–09:00 跨零点，账本键原来按开跑那一刻的日历日 ⇒ 00:00 那一跳吃的是
-    # 昨天的剩菜，却把「今天夜班」记成 done，当晚 18:00 看见已完成就跳过（九天里夜班
-    # 只剩凌晨那一班，而账本读起来是干净的）。改：跨零点的窗口落在 end 之前算前一夜；
-    # 天翻页清账改成只剪不擦。补丁在 patches/dsh-bili-scroll-window-key/。
-    ("夜班的账按『哪一夜』记，不按开跑那一刻的日历日",
-     "profiles/web/node_modules/dsh-bili-scroll/index.js",
-     ["windowKeyFor(k, WINDOWS[k], now)", "pruneWindows(st.windows, today)"]),
-    ("上面那条的判定本身（补丁自带的新文件，升级会一起删掉）",
-     "profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs",
-     ["export function windowKeyFor", "export function pruneWindows"]),
-    ("私信监听那句提示只说一次（原来每 60 秒一行，两天 3300 行把 code=1 埋了）",
-     "profiles/web/node_modules/dsh-bili-scroll/index.js", ["dmSaidSelfOnly"]),
-    # 2026-11-06 中午加：-509（请求过于频繁）每分钟一撞，越撞退得越久，一整天回不了一条私信，
-    # 而日志里只有「已兜住」。补丁要做两件事：退避 + 连败记账（只写日志等于没人知道）。
-    ("私信被限流要退避（-509 之后间隔 2→4→…→30 分钟，通了立刻复位），连败 6 次要写进 open_loops",
-     "profiles/web/node_modules/dsh-bili-scroll/index.js",
-     ["dmBackoffDue(dmBackoff", "nextDmBackoff(dmBackoff", "appendDmAlarm(r.state)", "退避复位"]),
-    ("上面那条的退避判定本身（补丁自带的新文件，升级会一起删掉）",
-     "profiles/web/node_modules/dsh-bili-scroll/lib/dm-backoff.mjs",
-     ["export function nextDmBackoff", "export function dmAlarmLine", "alarmAfter"]),
+    # ── 第三类：我给别人的插件打的补丁 ────────────────────────────────
+    # 2026-11-03 08:00 起，这一类也写在这张表里 —— 结果 2026-11-24 早上吃了自己的亏：
+    # 插件升到 2.5.3，补丁早就按新版重写了，这张表还抄着 2.4.0 的记号，
+    # 于是体检报「机制没了」，指的是一个已经不存在的东西。
+    # ⇒ 补丁的记号不再抄在这儿：**现读 shenjing/patches/*/patch.json**（见 check_patches）。
+    #   一处维护，不会漂：补丁改了，它跟着改；补丁没装，它报出来。
+    #   那边比这张表多问一句版本 —— 升级之后不能只说「记号缺了」，
+    #   得说「补丁针对 X、插件现在 Y」：那才是该重写补丁的时刻。
 ]
+
+
+def _plugin_dir(dsh_home, plugin):
+    for prof in ("web", "desktop", "headless"):
+        d = os.path.join(dsh_home, "profiles", prof, "node_modules", plugin)
+        if os.path.exists(os.path.join(d, "package.json")):
+            return d
+    return None
+
+
+def check_patches(archive, dsh_home):
+    """目录名以 _ 开头的是退役/暂缓，不看。
+
+    为什么要比版本（2026-11-24 08:00 加）：原来这张清单是手抄进 MECHANISM_CHECKS 的。
+    插件 02:00 升到 2.5.3，补丁跟着重写了，清单还抄着 2.4.0 的记号 ⇒ 体检喊「机制没了」，
+    指的是一个早就不存在的东西。一把只会喊旧事的尺子，跟不会喊的尺子一样没用。
+    """
+    miss_out, stale_out = [], []
+    root = os.path.join(archive, "patches")
+    if not os.path.isdir(root):
+        return miss_out, stale_out
+    for name in sorted(os.listdir(root)):
+        if name.startswith("_"):
+            continue
+        mf = os.path.join(root, name, "patch.json")
+        if not os.path.exists(mf):
+            continue
+        try:
+            with open(mf, encoding="utf-8") as f:
+                patch = json.load(f)
+        except Exception as e:
+            miss_out.append((name, "patch.json", "读不成 JSON（%s）" % e.__class__.__name__))
+            continue
+        # retired / hold 是"我有意不装"：退役（上游自己修了）与暂缓（账还没算清）。
+        # 不装不等于装作没事——理由写在 patch.json 里，open_loops 另记一笔。
+        if patch.get("retired") or patch.get("hold"):
+            continue
+        plugin = patch.get("plugin") or name
+        pdir = _plugin_dir(dsh_home, plugin)
+        if not pdir:
+            miss_out.append((name, plugin, "插件没装（或路径变了）⇒ 补丁无处可装"))
+            continue
+        ver = "?"
+        try:
+            with open(os.path.join(pdir, "package.json"), encoding="utf-8") as f:
+                ver = str(json.load(f).get("version") or "?")
+        except Exception:
+            pass
+        want = str(patch.get("targetVersion") or "")
+        if want and ver != want:
+            stale_out.append((name, "%s 现在装的是 %s，补丁针对 %s" % (plugin, ver, want)))
+        for m in patch.get("markers") or []:
+            rel = m.get("file") or "?"
+            must = m.get("must") or []
+            p = os.path.join(pdir, rel.replace("/", os.sep))
+            try:
+                with open(p, encoding="utf-8", errors="replace") as f:
+                    text = f.read()
+            except OSError:
+                miss_out.append((name, rel, "整个文件不在"))
+                continue
+            missing = [n for n in must if n not in text]
+            if missing:
+                miss_out.append((name, rel, "、".join(missing)))
+    return miss_out, stale_out
 
 
 def check_mechanisms(dsh_home):
@@ -478,6 +517,50 @@ def _last_plugin_load(dsh_home):
     return None, "找不到值班日志"
 
 
+def _patch_module_paths(dsh_home):
+    """补丁装进 node_modules 的、宿主会 import 的模块（绝对路径）。
+
+    2026-11-24 08:00 加：原来 check_loaded 是从 MECHANISM_CHECKS 里挑 profiles/ 开头的项。
+    那张表里的补丁项搬去 patches/*/patch.json 之后，它一个都找不到，于是
+    「补丁有没有被加载」这把尺子静悄悄地变成 unknown（exit 7）。
+    ⇒ 尺子也得跟着真相走：补丁装的是哪几个文件，就问哪几个文件的 mtime。
+    """
+    out = []
+    root = os.path.join(ARCHIVE, "patches")
+    if not os.path.isdir(root):
+        return out
+    for name in sorted(os.listdir(root)):
+        if name.startswith("_"):
+            continue
+        mf = os.path.join(root, name, "patch.json")
+        if not os.path.exists(mf):
+            continue
+        try:
+            with open(mf, encoding="utf-8") as f:
+                patch = json.load(f)
+        except Exception:
+            continue
+        if patch.get("retired") or patch.get("hold"):
+            continue
+        pdir = _plugin_dir(dsh_home, patch.get("plugin") or name)
+        if not pdir:
+            continue
+        rels = set()
+        for c in patch.get("copy") or []:
+            if c.get("to"):
+                rels.add(c["to"])
+        for e in patch.get("edits") or []:
+            if e.get("file"):
+                rels.add(e["file"])
+        for m in patch.get("markers") or []:
+            if m.get("file"):
+                rels.add(m["file"])
+        for rel in sorted(rels):
+            if rel.endswith((".js", ".mjs", ".cjs")):
+                out.append(os.path.join(pdir, rel.replace("/", os.sep)))
+    return out
+
+
 def check_loaded(dsh_home, start_override=None, load_override=None):
     """补丁文件比"代码真正被读进内存的那一刻"新 ⇒ 装了但还没加载。
 
@@ -500,20 +583,22 @@ def check_loaded(dsh_home, start_override=None, load_override=None):
         reloaded, reload_where = load_override, "反例里指定的"
     else:
         reloaded, reload_where = _last_plugin_load(dsh_home)
-    newest = None
+    # 只比**宿主进程 import 的模块**（profiles/…/node_modules 里的 .js/.mjs）。
+    # life-sync/run.sh、bundle.sh 那种是每次跑都重读的脚本，改了立刻生效，
+    # 拿它们比进程启动时间会冤枉人 —— 一改备份脚本就报"没加载"。
+    cands = []
     for desc, rel, _ in MECHANISM_CHECKS:
-        # 只比**宿主进程 import 的模块**（profiles/…/node_modules 里的 .js/.mjs）。
-        # life-sync/run.sh、bundle.sh 那种是每次跑都重读的脚本，改了立刻生效，
-        # 拿它们比进程启动时间会冤枉人 —— 一改备份脚本就报"没加载"。
-        if not rel.startswith("profiles/"):
-            continue
-        p = os.path.join(dsh_home, rel.replace("/", os.sep))
+        if rel.startswith("profiles/"):
+            cands.append(os.path.join(dsh_home, rel.replace("/", os.sep)))
+    cands.extend(_patch_module_paths(dsh_home))
+    newest = None
+    for p in cands:
         try:
             m = os.stat(p).st_mtime
         except OSError:
             continue
         if newest is None or m > newest[1]:
-            newest = (rel, m)
+            newest = (p.replace(dsh_home.rstrip(os.sep) + os.sep, "").replace(os.sep, "/"), m)
     if newest is None:
         return "unknown", "那几个补丁模块一个都读不到", None
     where = "pid=%s；宿主 %s 起" % (
@@ -1092,12 +1177,14 @@ def main():
             print("                 外加 _diverged/ 里 %d 份分叉存档（只许多不许少）" % len(remote_div))
 
     mech = []
+    patch_miss, patch_stale = [], []
     syntax_bad = []
     loaded_state, loaded_where, loaded_newest = None, None, None
     beats = []
     dsh_home = os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh-beta")
     if not a.skip_mechanisms:
         mech = check_mechanisms(dsh_home)
+        patch_miss, patch_stale = check_patches(ARCHIVE, dsh_home)
         syntax_bad = check_syntax(dsh_home)
         loaded_state, loaded_where, loaded_newest = check_loaded(dsh_home)
         beats = check_heartbeats(dsh_home)
@@ -1135,6 +1222,21 @@ def main():
             print("      %s 里找不到：%s" % (rel, missing))
         print("  → 要么把机制补回代码，要么把 REBIRTH.md 里那句承诺删掉。")
         print("     不许让它继续这么放着：文档说在、其实不在，比缺东西更难发现。")
+    if patch_miss:
+        code = code or 4
+        print("\n[补丁没了] node_modules 里找不到 patches/ 记着的记号（%d）：" % len(patch_miss))
+        for name, rel, missing in patch_miss:
+            print("  %s" % name)
+            print("      %s 里找不到：%s" % (rel, missing))
+        print("  → 装回去：node shenjing/tools/apply-patches.mjs")
+        print("     升级会整个换掉 node_modules，而且不吭声（11-03 01:44、11-24 02:00 各一次）。")
+    if patch_stale:
+        code = code or 4
+        print("\n[补丁过期] 装的插件版本跟补丁针对的不是同一版（%d）：" % len(patch_stale))
+        for name, detail in patch_stale:
+            print("  %s：%s" % (name, detail))
+        print("  → 别直接重装：先看新版是不是自己修了这一段（11-03 就有过一次，2.4.0 修得比我好）。")
+        print("     要留的，把 patch.json 的锚点和 targetVersion 一起改，再 node shenjing/tools/apply-patches.mjs。")
     if syntax_bad:
         code = code or 11
         print("\n[跑不起来] 文件在、记号也在，但 node 读不成一段程序（%d）：" % len(syntax_bad))

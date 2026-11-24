@@ -10,7 +10,7 @@
  * 被测的那份在 node_modules 里（升级会抹掉）。抹掉了先跑 tools/apply-patches.mjs。
  */
 
-import { planWindow, windowKeyFor, pruneWindows } from '/root/.dsh/profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs'
+import { windowKeyFor, pruneWindows } from '/root/.dsh/profiles/web/node_modules/dsh-bili-scroll/lib/window-plan.mjs'
 
 const NIGHT = { label: '晚上/夜间谷时', start: '18:00', end: '09:00' }
 const NOON = { label: '中午谷时', start: '12:00', end: '14:00' }
@@ -108,13 +108,13 @@ t('时间线：晚上跑过 ⇒ 凌晨不再跑 ⇒ 第二天晚上再跑', () =
   const midnight = at('2026-11-09T00:00:00')
   const k2 = windowKeyFor('night', NIGHT, midnight)
   eq(k2, '2026-11-08:night', '凌晨那跳的键')
-  eq(planWindow(st, k2, midnight).reason, 'done', '01 凌晨不该再跑一班')
+  eq(Boolean(st.windows[k2]), true, '01 凌晨那跳必须看见昨夜已跑（上游 tick 就是看这格）')
 
   // 11-09 18:00 当晚那一班：键是新的，要跑
   const nextEvening = at('2026-11-09T18:00:00')
   const k3 = windowKeyFor('night', NIGHT, nextEvening)
   eq(k3, '2026-11-09:night')
-  eq(planWindow(st, k3, nextEvening).run, true, '02 当晚这一班必须跑')
+  eq(Boolean(st.windows[k3]), false, '02 当晚这一班必须跑（键是新的）')
 })
 
 t('时间线：晚上错过 ⇒ 凌晨补跑，但它算前一夜、不占第二天', () => {
@@ -122,15 +122,15 @@ t('时间线：晚上错过 ⇒ 凌晨补跑，但它算前一夜、不占第二
   let st = { day: '2026-11-09', windows: pruneWindows({ '2026-11-08:noon': true }, '2026-11-09') }
   const midnight = at('2026-11-09T00:20:00')
   const k = windowKeyFor('night', NIGHT, midnight)
-  eq(planWindow(st, k, midnight).run, true, '03 补跑要能跑起来')
+  eq(Boolean(st.windows[k]), false, '03 补跑要能跑起来（键昨夜没有）')
   // 补跑记账
   st = { ...st, windows: { ...st.windows, [k]: true } }
   // 同一夜 08:00 再跳一次：不许再来一遍
   const dawn = at('2026-11-09T08:00:00')
-  eq(planWindow(st, windowKeyFor('night', NIGHT, dawn), dawn).reason, 'done', '04 同一夜不许跑第二遍')
+  eq(Boolean(st.windows[windowKeyFor('night', NIGHT, dawn)]), true, '04 同一夜不许跑第二遍')
   // 当天 18:00（新的一夜）：仍然要跑
   const evening = at('2026-11-09T18:00:00')
-  eq(planWindow(st, windowKeyFor('night', NIGHT, evening), evening).run, true, '05 新一夜照跑')
+  eq(Boolean(st.windows[windowKeyFor('night', NIGHT, evening)]), false, '05 新一夜照跑')
 })
 
 console.log(`\n${pass} 过 / ${fail} 没过`)

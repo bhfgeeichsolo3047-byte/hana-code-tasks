@@ -145,6 +145,15 @@ for (const id of dirs) {
   const manifestPath = join(pdir, 'patch.json')
   if (!existsSync(manifestPath)) continue
   const patch = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  // retired：上游自己修了，别叠；hold：我有意暂缓（账没算清）。两种都不装，也不报错。
+  // ⚠️ 别用"把目录挪走"来表示不装 —— 体检拿历史整包比路径，挪走就报「丢了」（2026-11-24 踩过）。
+  const suspended = patch.retired ? 'retired' : (patch.hold ? 'hold' : '')
+  if (suspended) {
+    console.log(`\n== ${id}`)
+    console.log(`  — ${suspended}：不装。${patch.retired ? patch.retiredWhy : patch.holdWhy}`)
+    already++
+    continue
+  }
   const pluginDir = findPluginDir(patch.plugin || id)
 
   console.log(`\n== ${id}`)

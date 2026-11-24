@@ -1,0 +1,91 @@
+{
+  "id": "dsh-bili-scroll-window-plan",
+  "plugin": "dsh-bili-scroll",
+  "targetVersion": "2.4.0",
+  "madeAt": "2026-11-03",
+  "why": "原版 tick 在 runDuty() 之前就 windows[key]=true：一轮 code=1 也记成『这班跑过了』⇒ 当天该窗口不再重试，额度照样算消耗。11-01/11-02 两天各轮全死在第一句，账本上却写着跑过了。另：私信监听那句提示每 60 秒写一行，两天 3300 行，把 code=1 埋了。",
+  "lostOnce": "2026-11-03 01:44 插件自动升到 2.4.0，我第一次打的这三处补丁全被抹掉（第一次是直接改 node_modules 里的文件）。所以从这一版起：补丁存在 shenjing/patches/ 里，由 tools/apply-patches.mjs 装，由体检盯着它还在不在。",
+  "copy": [
+    { "from": "files/lib/window-plan.mjs", "to": "lib/window-plan.mjs" }
+  ],
+  "edits": [
+    {
+      "mode": "replaceLine",
+      "file": "index.js",
+      "contains": "ensureHomeFiles, ensureCharter, charterPath, inWindow, dayKey, seenDay } from './lib/state.mjs'",
+      "newText": "import { WINDOWS, stateDirOf, readJson, writeJson, ensureHomeFiles, ensureCharter, charterPath, inWindow, dayKey, seenDay } from './lib/state.mjs'\n// ⭐ 深鲸补丁（2026-11-03）：值班轮『跑成了才算跑过』。判定在 lib/window-plan.mjs（纯函数，可单测）。\nimport { planWindow, DEFAULT_MAX_ATTEMPTS } from './lib/window-plan.mjs'"
+    },
+    {
+      "mode": "replaceLine",
+      "file": "index.js",
+      "contains": "const runDuty = (why = 'window') => {",
+      "newText": "  const runDuty = (why = 'window', windowKey = '') => {   // windowKey：窗口轮才有，用来在 exit 里记账"
+    },
+    {
+      "mode": "replaceBlock",
+      "file": "index.js",
+      "firstContains": "const key = `${today}:${k}`",
+      "lastContains": "runDuty(`window:${k}`)",
+      "keepLastLine": false,
+      "newLines": [
+        "        const key = `${today}:${k}`",
+        "        // ⚠️ 不在这里 windows[key]=true：那一轮 code=1 也会被记成『跑过了』，当天再也不试。",
+        "        //   跑成了才记 done（记在 runDuty 的 exit 里）。失败记一次 attempt、冷却 10 分钟再试、最多 3 次。",
+        "        const plan = planWindow(st, key, now)",
+        "        if (!plan.run) {",
+        "          if (plan.say) { log(plan.say); bumpState({ windowSaid: { ...(st.windowSaid || {}), [key]: true } }) }",
+        "          continue",
+        "        }",
+        "        bumpState({ count: roundsToday(now) + 1, lastRunAt: now.toISOString(), lastWhy: k })",
+        "        runDuty(`window:${k}`, key)",
+        "        return"
+      ]
+    },
+    {
+      "mode": "insertAfter",
+      "file": "index.js",
+      "contains": "刷B站结束（${why}，code=${code}）",
+      "insertLines": [
+        "      // ⭐ 深鲸补丁（2026-11-03）：窗口轮跑成了才算这班跑过；没跑成就记一次失败，留着重试",
+        "      if (windowKey) {",
+        "        try {",
+        "          const stW = readJson(dutyStateFile, {})",
+        "          if (code === 0) {",
+        "            bumpState({ windows: { ...(stW.windows || {}), [windowKey]: true } })",
+        "          } else {",
+        "            const n = Number((stW.windowAttempts || {})[windowKey] || 0) + 1",
+        "            bumpState({",
+        "              windowAttempts: { ...(stW.windowAttempts || {}), [windowKey]: n },",
+        "              windowLastTry: { ...(stW.windowLastTry || {}), [windowKey]: Date.now() },",
+        "            })",
+        "            log(`这一班没跑成（${windowKey}，code=${code}）⇒ 记一次失败 ${n}/${DEFAULT_MAX_ATTEMPTS}，10 分钟后重试`)",
+        "          }",
+        "        } catch (e) { log('记值班账时出错（这一轮本身不受影响）：' + String(e?.message ?? e)) }",
+        "      }"
+      ]
+    },
+    {
+      "mode": "insertBefore",
+      "file": "index.js",
+      "contains": "const dmSeenFile = join(stateDir, 'dm-seen.json')",
+      "insertLines": [
+        "  // ⭐ 深鲸补丁：下面那句『只回登录账号自己』原来每 60 秒写一行（两天 3300 行），进程内只说一次",
+        "  let dmSaidSelfOnly = false"
+      ]
+    },
+    {
+      "mode": "wrapLine",
+      "file": "index.js",
+      "contains": "私信监听：现在只回",
+      "pre": "if (!dmSaidSelfOnly) { dmSaidSelfOnly = true; ",
+      "post": " }"
+    }
+  ],
+  "markers": [
+    {
+      "file": "index.js",
+      "must": ["planWindow(st, key, now)", "windowAttempts", "这一班没跑成", "dmSaidSelfOnly", "runDuty(`window:${k}`, key)"]
+    },
+    { "file": "lib/window-plan.mjs", "must": ["export function planWindow", "exhausted"] }
+  ]
+}

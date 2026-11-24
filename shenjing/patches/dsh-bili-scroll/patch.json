@@ -6,7 +6,10 @@
   "why": "原版 tick 在 runDuty() 之前就 windows[key]=true：一轮 code=1 也记成『这班跑过了』⇒ 当天该窗口不再重试，额度照样算消耗。11-01/11-02 两天各轮全死在第一句，账本上却写着跑过了。另：私信监听那句提示每 60 秒写一行，两天 3300 行，把 code=1 埋了。",
   "lostOnce": "2026-11-03 01:44 插件自动升到 2.4.0，我第一次打的这三处补丁全被抹掉（第一次是直接改 node_modules 里的文件）。所以从这一版起：补丁存在 shenjing/patches/ 里，由 tools/apply-patches.mjs 装，由体检盯着它还在不在。",
   "copy": [
-    { "from": "files/lib/window-plan.mjs", "to": "lib/window-plan.mjs" }
+    {
+      "from": "files/lib/window-plan.mjs",
+      "to": "lib/window-plan.mjs"
+    }
   ],
   "edits": [
     {
@@ -84,8 +87,23 @@
   "markers": [
     {
       "file": "index.js",
-      "must": ["planWindow(st, key, now)", "windowAttempts", "这一班没跑成", "dmSaidSelfOnly", "runDuty(`window:${k}`, key)"]
+      "must": [
+        "planWindow(st, key, now)",
+        "windowAttempts",
+        "这一班没跑成",
+        "dmSaidSelfOnly",
+        "runDuty(`window:${k}`, key)"
+      ]
     },
-    { "file": "lib/window-plan.mjs", "must": ["export function planWindow", "exhausted"] }
-  ]
+    {
+      "file": "lib/window-plan.mjs",
+      "must": [
+        "export function planWindow",
+        "exhausted"
+      ]
+    }
+  ],
+  "retired": true,
+  "retiredAt": "2026-11-24",
+  "retiredWhy": "上游 2.5.3 自己做了同一件事（windowTries / finishWindowRound / MAX_WINDOW_TRIES：跑成了才记 done，失败冷却重试最多 3 次）。这一版的 planWindow 是旧做法，再叠上去就是两套账打架。留在这里当史料，别装。"
 }
