@@ -31,6 +31,7 @@ import datetime
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -744,6 +745,17 @@ def _duty_night_starts(log_path):
     return out
 
 
+def _count_report_picks(report_path):
+    """数今天的报告里 `### BVxxxxxxxxxx` 有几条 —— 跟插件 perDay 那道闸同一个口径。
+    读不到返回 None（那是没量，不写成 0）。"""
+    try:
+        with open(report_path, encoding="utf-8") as f:
+            text = re.sub(r"```[\s\S]*?```", "", f.read())
+    except OSError:
+        return None
+    return len(set(re.findall(r"^#{2,3}[ \t]*(BV[0-9A-Za-z]{10})", text, re.M)))
+
+
 def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=None,
                        log_path=None):
     """值班轮最后一次跑是什么时候，以及今天这几班的账对不对得上。
@@ -762,6 +774,13 @@ def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=N
     now_s = time.time() if now is None else now
     limit = DUTY_MAX_AGE_HOURS if max_age_hours is None else max_age_hours
     hits = []
+
+    # 配置就在 state.json 隔壁；读不到就当空 —— 那样夜班那条检查只按日志说话
+    try:
+        with open(os.path.join(os.path.dirname(path), "config.json"), encoding="utf-8") as f:
+            duty_cfg = json.load(f)
+    except (OSError, ValueError):
+        duty_cfg = {}
 
     last = st.get("lastRunAt") or ""
     try:
@@ -793,7 +812,11 @@ def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=N
                      % (age_h, st.get("count"), st.get("picked"))))
 
     # 夜班是不是又在零点烧掉了（2026-11-09 加：上面那条只认周末那次形状）
+    # 2026-11-25 08:00 修：11-24 的补丁把夜班键记到「前一夜」（windowKeyFor），这一条却还照旧
+    # 写着"state.json 一早就把 `今天:night` 记成 true" —— 账本里早没那个键了，尺子照着旧口径背稿子。
+    # 所以现在键名从账本里读，有哪把说哪把；顺带把『今晚 18:00 那一班到底开没开』单独量一条。
     starts = _duty_night_starts(log_path or _duty_log_path(dsh_home))
+    night_keys = sorted(k for k in windows if k.endswith(":night") and windows.get(k))
     if starts:
         by_day = {}
         for e in starts:
@@ -801,17 +824,47 @@ def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=N
         early_days = [d for d, es in sorted(by_day.items())
                       if all(time.localtime(e).tm_hour < DUTY_EARLY_HOUR for e in es)]
         latest = max(starts)
-        latest_h = time.localtime(latest).tm_hour
-        if latest_h < DUTY_EARLY_HOUR and len(early_days) >= 2:
-            hits.append(("夜班又在零点烧掉了：最近一次 window:night 开跑是 %s，翻得到账的 %d 天全是天亮前"
-                         % (time.strftime("%m-%d %H:%M", time.localtime(latest)), len(early_days)),
-                         "夜班窗口写的是 18:00–09:00，零点跑在窗口里；可 state.json 一早就把 "
-                         "`%s:night` 记成 true，18:00 那一跳看到『今天这班跑过了』直接跳过 ⇒ "
-                         "夜班事实上只剩凌晨那一班，而且它看的是前一天的剩余内容。"
-                         % time.strftime("%Y-%m-%d", time.localtime(latest))))
+        latest_dt = time.localtime(latest)
+        if latest_dt.tm_hour < DUTY_EARLY_HOUR and len(early_days) >= 2:
+            cal_key = time.strftime("%Y-%m-%d", latest_dt) + ":night"
+            prev_key = time.strftime("%Y-%m-%d", time.localtime(latest - 86400)) + ":night"
+            if cal_key in night_keys:
+                ledger = ("账本把 `%s` 记成 true（按开跑那一刻的日历日）⇒ 当晚 18:00 那跳看见"
+                          "『今天这班跑过了』直接跳过" % cal_key)
+            elif prev_key in night_keys:
+                ledger = ("账本里只有 `%s`（键落在前一夜，11-24 的补丁确实在跑）⇒ 不是账本挡的，"
+                          "18:00 那一跳是被别的闸门挡掉的（额度 / 窗口 / 宿主没醒）" % prev_key)
+            else:
+                ledger = ("账本里一个夜间键都没有（%s）"
+                          % ("、".join("`%s`" % k for k in night_keys) or "空"))
+            hits.append((
+                "夜班只在零点开跑：最近一次 window:night 开跑是 %s，翻得到账的 %d 天全在天亮前"
+                % (time.strftime("%m-%d %H:%M", latest_dt), len(early_days)),
+                "夜班窗口写的是 18:00–09:00，18:00 之后那一班从来没开跑过。" + ledger
+                + "；count=%s picked=%s" % (st.get("count"), st.get("picked"))))
     elif starts is None:
         hits.append(("duty.log 读不了，夜班到底在几点跑，这次没量",
                      "%s —— 没量不等于没问题" % (log_path or _duty_log_path(dsh_home))))
+
+    # 今晚 18:00 那一班到底开了没有（2026-11-25 加）
+    # 上面那条量的是「历史全在天亮前」，这条量的是「今天该开的那班开了没有」。
+    # 只在 18:30 之后问 —— 之前问没有意义，时段还没到。
+    now_dt = time.localtime(now_s)
+    evening_due = now_dt.tm_hour > 18 or (now_dt.tm_hour == 18 and now_dt.tm_min >= 30)
+    if starts and evening_due and duty_cfg.get("night", True):
+        today_d = time.strftime("%Y-%m-%d", now_dt)
+        tonight = [e for e in starts
+                   if time.strftime("%Y-%m-%d", time.localtime(e)) == today_d
+                   and time.localtime(e).tm_hour >= 18]
+        if not tonight:
+            tkey = today_d + ":night"
+            picks = _count_report_picks(os.path.join(
+                os.path.dirname(path), "out", today_d + ".md"))
+            hits.append((
+                "今晚 18:00 那一跳没跑：duty.log 里 %s 18:00 之后没有 window:night 开跑" % today_d,
+                "账本里 `%s` %s；state count=%s picked=%s，今天报告里挑中 %s 条、config perDay=%s"
+                % (tkey, "已经是 true" if windows.get(tkey) else "还没记",
+                   st.get("count"), st.get("picked"), picks, duty_cfg.get("perDay", "?"))))
     return hits, path
 
 
@@ -1081,6 +1134,7 @@ def main():
         # 自己按三种形状各写一份 state.json：太久没跑 / 两班挤在天亮前 / 一切正常。
         ok11 = None
         ok12 = None
+        ok13 = None
         try:
             duty_dir = os.path.join(TMP_SELFTEST, "duty")
             os.makedirs(duty_dir, exist_ok=True)
@@ -1153,6 +1207,25 @@ def main():
                   % ("报出来了" if h_night_early else "没报，零点烧夜班这条尺子是假的"))
             print("          同一份账、夜班都在 18:30 之后开跑 → %s"
                   % ("没误报" if not h_night_evening else "把对的判成错的，会天天误报"))
+
+            # 反例十三：晚上八点了，今天 18:00 那一班一个字都没有。
+            # 这条量的是「今晚该开的那班开了没有」，跟十二那条（历史形状）不是一件事。
+            fake_evening = fake_now + 6 * 3600          # 今天 19:00
+            h_missed, _ = check_duty_silence(state_path=p_clean, now=fake_evening,
+                                             log_path=log_evening)
+            log_today_evening = write_duty_log(
+                "duty-tonight.log",
+                [local_at(1, "18:40:00"), local_at(2, "18:31:00"), local_at(0, "18:42:00")])
+            h_tonight, _ = check_duty_silence(state_path=p_clean, now=fake_evening,
+                                              log_path=log_today_evening)
+            ok13 = any("18:00 那一跳没跑" in t for t, _ in h_missed) \
+                and not any("18:00 那一跳没跑" in t for t, _ in h_tonight)
+            print("反例十三：19:00 了、今天 18:00 那班没开 → %s"
+                  % ("报出来了" if any("18:00 那一跳没跑" in t for t, _ in h_missed)
+                     else "没报，今晚该开的班没开都看不见"))
+            print("          同一时刻、今天 18:42 真开过 → %s"
+                  % ("没误报" if not any("18:00 那一跳没跑" in t for t, _ in h_tonight)
+                     else "把对的判成错的，会天天误报"))
         except Exception as e:
             ok11 = False
             print("反例十一：跑的时候出错了（%s：%s）" % (e.__class__.__name__, e))
@@ -1161,7 +1234,7 @@ def main():
                      and ok6 is not False and ok7 is not False
                      and ok8 is not False and ok9 is not False
                      and ok10 is not False and ok11 is not False
-                     and ok12 is not False) else 9
+                     and ok12 is not False and ok13 is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
