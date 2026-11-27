@@ -1,10 +1,12 @@
 {
   "id": "dsh-bili-scroll-dm-backoff",
   "plugin": "dsh-bili-scroll",
-  "targetVersion": "2.4.0",
+  "targetVersion": "2.5.3",
   "madeAt": "2026-11-06",
+  "reanchoredAt": "2026-11-27",
   "why": "私信检查每分钟撞一次 -509（请求过于频繁），撞得越勤退得越久：11-03 那天 12:04–21:29 共 32 次，一整天回不了一条私信，而日志里只有一行「私信监查出错（已兜住）」。这一版：-509 当退避信号（2→4→8→16→30 分钟封顶），成功一次立刻复位；连败 6 次往 open_loops.md 写一条账（6 小时内不重复），别再指望有人去翻日志。",
-  "onConflict": "旧补丁 dsh-bili-scroll 的锚点已被改掉，所以本补丁单独一个目录、锚点全部落在旧补丁的输出上；顺序按目录名排序 ⇒ 新机器上先装旧补丁再装这条。",
+  "whyNow": "2026-11-27 中午装：11-24 那笔账缺的一半数据量齐了（discoveries/dm-509-ledger.md）—— 440 次 / 12 天，同一天相邻间隔中位数 11 分钟，≤10 分钟的 106 个，跟 11-09 的「每小时 4–6 次」对得上；代价那一侧 25 天里真私信只有 1 条（他自己），退避最坏拖 30 分钟在基数为 0 的情况下不成立。11-24 定的「按 2.5.3 锚点重写再装」就是今天这件事。",
+  "revert": "改前把 index.js 备份成 index.js.bak-2026-11-27T-preDmBackoff / lib/dm-backoff.mjs 直接删掉、再从备份盖回 index.js 即可（apply-patches --force 不要用这条来卸）。",
   "copy": [
     {
       "from": "files/lib/dm-backoff.mjs",
@@ -15,7 +17,7 @@
     {
       "mode": "insertAfter",
       "file": "index.js",
-      "contains": "import { planWindow, DEFAULT_MAX_ATTEMPTS } from './lib/window-plan.mjs'",
+      "contains": "import { loadCred as dmCred, listSessions as dmList, fetchMsgs as dmFetch } from './lib/dm.mjs'",
       "insertLines": [
         "// ⭐ 深鲸补丁（2026-11-06 中午）：私信被限流时的退避判定（纯函数，patches/dsh-bili-scroll-dm-backoff/test-dm-backoff.mjs 覆盖）",
         "import { dmBackoffDue, nextDmBackoff, resetDmBackoff, emptyDmBackoff, dmAlarmLine } from './lib/dm-backoff.mjs'"
@@ -24,7 +26,7 @@
     {
       "mode": "insertAfter",
       "file": "index.js",
-      "contains": "const readJsonFile = (f, dflt) =>",
+      "contains": "  const dmQuotaFile = join(stateDir, 'dm-quota.json')",
       "insertLines": [
         "  // ⭐ 深鲸补丁（2026-11-06 中午）：退避状态落盘 —— 宿主重启不该把「刚被限流」这件事忘掉",
         "  const dmBackoffFile = join(stateDir, 'dm-backoff.json')",
@@ -100,8 +102,5 @@
         "alarmAfter"
       ]
     }
-  ],
-  "hold": true,
-  "holdAt": "2026-11-24",
-  "holdWhy": "-509 的真基线是每小时 4–6 次（全天 6–7%，11-09 晚上重算过），不是 1.4%。这个基线下补丁会被频繁触发：不再每分钟撞接口，换来真有私信时最坏晚 30 分钟才看见。这笔账还没算清，先不装。要装：按 2.5.3 的锚点重写，去掉 hold，再 apply。"
+  ]
 }

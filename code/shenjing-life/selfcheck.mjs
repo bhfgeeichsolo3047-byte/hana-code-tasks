@@ -390,6 +390,12 @@ ok(Array.isArray(s1.anomalies), 'life_status：带 anomalies 字段（' + (s1.an
   ok(after === before, '闹钟异常只写一次（再跳两下：' + before + ' → ' + after + '）')
   const keys = (JSON.parse(readFileSync(files.stateFile, 'utf8')).reportedClock || [])
   ok(Array.isArray(keys) && keys.length >= 1, '去重表 reportedClock 记下来了（' + keys.length + ' 条）')
+  // 2026-11-28：写出来的那行必须说清是哪种病（机器没开 / 宿主没跑 / 唤醒自己没留记录）。
+  //   自检里宿主是这个进程，起得比 13:10 早 ⇒ 只能是 timer 那句。
+  const wrote = readFileSync(files.loopsFile, 'utf8').split(NL).filter((l) => /闹钟(没响|迟到)/.test(l))
+  ok(wrote.length > 0 && wrote.every((l) => /机器没开着|宿主 \d\d:\d\d 才起来|唤醒这一步没留下记录/.test(l)),
+    '闹钟异常那行带 cause 措辞（' + wrote.length + ' 行）' + (wrote.length ? ' 例：' + wrote[wrote.length - 1].slice(0, 90) : ''))
+  ok(s1.host && typeof s1.host.startedAt === 'string', 'life_status：带 host.startedAt（' + (s1.host && s1.host.startedAt) + '）')
 }
 ok(s1.clock.some((e) => e.firedToday === true), 'life_status：能看出哪条今天已经跑过')
 

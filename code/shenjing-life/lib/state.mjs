@@ -182,14 +182,33 @@ export function firedAtOfState(lastFired, entryId, now = new Date()) {
  *   到点那一刻机器还没开着 ⇒ cause='downtime'。
  *   局限写在明处：Windows 上 os.uptime() 对"睡眠"算不算过去，文档没保证。
  *   所以这条只用来**降级**（少写一行假待办），绝不用来提高"一切正常"的数字。
+ *
+ * ⭐ 2026-11-28 08:1x 补第三种病：**宿主没在跑**（这台机器的 dsh 进程没起，机器却开着）。
+ *   11-27 那班晚了 276 分钟，查下来是机器 11-26 16:05 开过机、dsh 到 11-27 12:34 才起，
+ *   中间 23 小时什么都没有；可 `os.uptime()` 推出来的开机时刻在到点之前，判不成 downtime，
+ *   于是写出来的那行跟 10-27 / 11-01 几次"定时器疑似坏"长得一模一样。
+ *   现在多带两个只靠事实的输入：hostStartedAt（process.uptime() 反推的宿主起时刻）、
+ *   machineOnSince（os.uptime() 反推的开机时刻）。三种 cause：
+ *     downtime  —— 到点那会儿机器没开
+ *     host-down —— 机器开着，但宿主比到点晚起（那段时间没有 tick，也不可能有唤醒）
+ *     timer     —— 机器和宿主都在跑，就是没留下唤醒记录（这才是闹钟/唤醒自己的病）
+ *   ⚠️ 三种**都照样写一行进 open_loops**，不像 downtime 当初想的那样吞掉：
+ *      11-27 那个 23 小时空档正是那天最值得知道的事，从账上抹掉比噪音更糟。
+ *      要改的是措辞——一眼能读出是哪一种，下次醒来不用再从头查一遍。
  */
 export function clockAnomalies(entries, now = new Date(), logLines = [], opts = {}) {
   const grace = Number.isFinite(opts.graceMin) ? opts.graceMin : CLOCK_GRACE_MIN
   const machineOnSince = Number.isFinite(opts.machineOnSince) ? Number(opts.machineOnSince) : null
+  const hostUpSince = Number.isFinite(opts.hostStartedAt) ? Number(opts.hostStartedAt) : null
   const today = dayKey(now)
   const out = []
-  /** 到点那一刻机器开着吗？机器没开 ⇒ 这条不是我的错，也不是闹钟的错 */
-  const wasAsleepThen = (scheduled) => machineOnSince !== null && scheduled + grace * 60000 < machineOnSince
+  /** 到点那一刻，机器和宿主各在不在？两种都不是闹钟的错，但要说清是哪种 */
+  const causeAt = (scheduled) => {
+    const t = scheduled + grace * 60000
+    if (machineOnSince !== null && t < machineOnSince) return 'downtime'
+    if (hostUpSince !== null && t < hostUpSince) return 'host-down'
+    return 'timer'
+  }
   for (const e of Array.isArray(entries) ? entries : []) {
     if (String(e.kind || 'clock') !== 'clock' || e.enabled === false) continue
     const m = parseHhmm(e.when)
@@ -205,20 +224,28 @@ export function clockAnomalies(entries, now = new Date(), logLines = [], opts = 
     const tState = firedAtOfState(opts.lastFired, e.id, now)
     const firedAt = tLog === null ? tState : (tState === null ? tLog : Math.min(tLog, tState))
     const key = today + ':' + e.id
+    const cause = causeAt(scheduled)
     if (firedAt === null) {
-      out.push({ key, id: e.id, when, day: today, kind: 'missing', lateMin: Math.round((now.getTime() - scheduled) / 60000) })
+      out.push({ key, id: e.id, when, day: today, kind: 'missing', cause, hostUpSince, machineOnSince, lateMin: Math.round((now.getTime() - scheduled) / 60000) })
     } else if (firedAt > scheduled + grace * 60000) {
-      out.push({ key, id: e.id, when, day: today, kind: 'late', lateMin: Math.round((firedAt - scheduled) / 60000) })
+      out.push({ key, id: e.id, when, day: today, kind: 'late', cause, hostUpSince, machineOnSince, lateMin: Math.round((firedAt - scheduled) / 60000) })
     }
   }
   return out
 }
 
-/** 一条异常 → open_loops.md 里的一行（措辞里必须有日期和分钟数，不然醒来也不知道是啥） */
+/** 一条异常 → open_loops.md 里的一行（措辞里必须有日期和分钟数，不然醒来也不知道是啥）
+ *  2026-11-28：按 cause 分三种措辞。同一句写三种病，读的人（还是我）每次都得重新查一遍。 */
 export function clockAnomalyLine(a, at = new Date()) {
   const hm = pad2(at.getHours()) + ':' + pad2(at.getMinutes())
-  if (a.kind === 'late') return '- [ ] 闹钟迟到：' + a.id + '@' + a.when + ' 晚了 ' + a.lateMin + ' 分钟才醒 — 自动写入 ' + a.day + ' ' + hm
-  return '- [ ] 闹钟没响：' + a.id + '@' + a.when + ' 到点 ' + a.lateMin + ' 分钟了还没有唤醒记录（可能是 dsh web 没跑 / tick 没到点）— 自动写入 ' + a.day + ' ' + hm
+  const hmOf = (ms) => { const d = new Date(ms); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) }
+  const why = a.cause === 'downtime'
+    ? ' —— 到点那会儿这台机器没开着（开机 ' + (Number.isFinite(a.machineOnSince) ? hmOf(a.machineOnSince) : '?') + '）'
+    : a.cause === 'host-down'
+      ? ' —— 宿主 ' + (Number.isFinite(a.hostUpSince) ? hmOf(a.hostUpSince) : '?') + ' 才起来，那之前没有 tick（不是定时器的错）'
+      : ' —— 机器和宿主当时都在跑，是唤醒这一步没留下记录（tick 没到点 / 那一轮起不来）'
+  if (a.kind === 'late') return '- [ ] 闹钟迟到：' + a.id + '@' + a.when + ' 晚了 ' + a.lateMin + ' 分钟才醒' + why + ' — 自动写入 ' + a.day + ' ' + hm
+  return '- [ ] 闹钟没响：' + a.id + '@' + a.when + ' 到点 ' + a.lateMin + ' 分钟了还没有唤醒记录' + why + ' — 自动写入 ' + a.day + ' ' + hm
 }
 
 /** 去重表：只留最近的 n 个 key，别让 state.json 无限长 */

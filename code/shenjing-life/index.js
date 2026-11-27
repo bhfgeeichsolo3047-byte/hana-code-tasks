@@ -34,7 +34,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statS
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
+import { homedir, uptime as osUptime } from 'node:os'
 import {
   stateDirOf, archiveDirOf, readJson, writeJson, appendLine,
   dayKey, localIso, minutesOfDay, parseHhmm, isSilentAt,
@@ -189,9 +189,17 @@ export function apply(ctx, config) {
    *   现在按"各取一侧"合并：本地 Windows 适配（toast 通知、bash 探测、DSH_HOME 路径）留下，
    *   对面这条闹钟检查搬进来。
    */
+  /** 宿主这次什么时候起的 / 机器什么时候开的（2026-11-28 加）。
+   *  只有这两个数能把"闹钟坏了"和"宿主/机器当时不在"分开 —— 都是反推出来的事实，不是猜。 */
+  const hostFacts = (nowMs = Date.now()) => {
+    let machineOnSince = null
+    try { machineOnSince = nowMs - Math.round(osUptime() * 1000) } catch { /* 读不到就当不知道 */ }
+    return { hostStartedAt: nowMs - Math.round(process.uptime() * 1000), machineOnSince }
+  }
+
   const reportClockAnomalies = (now, st) => {
     try {
-      const found = clockAnomalies(readClockEntries(), now, readTodayLogs(now), { lastFired: st?.lastFired })
+      const found = clockAnomalies(readClockEntries(), now, readTodayLogs(now), { lastFired: st?.lastFired, ...hostFacts(now.getTime()) })
       const reported = Array.isArray(st?.reportedClock) ? st.reportedClock : []
       const fresh = found.filter((a) => !reported.includes(a.key))
       if (!fresh.length) return []
@@ -680,7 +688,8 @@ export function apply(ctx, config) {
         })),
         dueNow: due.due ? due.why : null,
         // 到点没醒 / 醒晚了：空数组 = 今天都按时（2026-10-27 接上的，之前这个字段根本不存在）
-        anomalies: clockAnomalies(readClockEntries(), now, logs, { lastFired: st.lastFired }),
+        anomalies: clockAnomalies(readClockEntries(), now, logs, { lastFired: st.lastFired, ...hostFacts(now.getTime()) }),
+        host: (() => { const f = hostFacts(now.getTime()); return { startedAt: localIso(new Date(f.hostStartedAt)), machineOnSince: f.machineOnSince === null ? null : localIso(new Date(f.machineOnSince)) } })(),
         mind: readMind(),
         today: {
           wakes: st.day === dayKey(now) ? st.wakesToday : 0,
