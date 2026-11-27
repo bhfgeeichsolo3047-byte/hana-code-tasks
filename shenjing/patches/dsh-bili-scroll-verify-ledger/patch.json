@@ -1,0 +1,28 @@
+{
+  "id": "dsh-bili-scroll-verify-ledger",
+  "plugin": "dsh-bili-scroll",
+  "targetVersion": "2.5.3",
+  "madeAt": "2026-11-25",
+  "why": "评论复核的两个洞（11-25 13:00 记账，21:30 补上）：① rpid 从 seen.md 的表格单元格抠，那格是模型手写的散文、写表时被截到 60 字，11-25 12:01 那条被截成 `rpid=321247`，parseSeen 要九位 ⇒ 整行静默 continue ⇒ 最新的一条恰恰最不可能被复核到。现在候选改从 comments.md 来（mcp_server.py 在发成功那一刻机器写的台账，rpid 是接口真号）。② `visible: null` 永不过期，每轮白查同一批老记录（12:03 那轮 6 条全是 11-08/11-09 的）；实测 BV1umpj6RETg all_count=3690，旧评论排在时间倒序第 180 页附近，「顶层·最新一页」对它们恒定「没查到」。现在发出去超过 24h 就记「放弃·翻页够不着」，24h 内的 null 隔 6h 才重查。",
+  "whyNotPatchLines": "改动横跨 verifyRecent 的候选循环和状态收尾，行级锚点太脆；整份 verify.mjs 只有一个函数是复核的账本逻辑，整体替换更看得清。代价：上游以后改 verify.mjs，这份 copy 会把它的改动盖掉 —— 所以 targetVersion 钉在 2.5.3，插件升级后体检会报「补丁记号在、但版本对不上」，那时先看上游改了什么再决定。",
+  "tradeoff": "放弃了『确认可见后 7 天再查一次』（原版有）：老评论本来就查不到，重查只会把 visible:true 冲成 null。留下的能力：刚发出去的（24h 内）照旧复核，确认可见的永久记下。",
+  "copy": [
+    {
+      "from": "files/lib/verify.mjs",
+      "to": "lib/verify.mjs"
+    }
+  ],
+  "markers": [
+    {
+      "file": "lib/verify.mjs",
+      "must": [
+        "export function parseComments",
+        "export function seenRowsMissingRpid",
+        "export function pickFresh",
+        "gaveUp",
+        "VERIFY_EXPIRY_MS"
+      ]
+    }
+  ],
+  "tests": "node patches/dsh-bili-scroll-verify-ledger/test-verify-candidates.mjs（9 条纯函数单测，不联网）"
+}
