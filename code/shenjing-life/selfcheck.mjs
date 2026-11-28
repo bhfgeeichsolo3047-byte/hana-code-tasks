@@ -395,7 +395,37 @@ ok(Array.isArray(s1.anomalies), 'life_status：带 anomalies 字段（' + (s1.an
   const wrote = readFileSync(files.loopsFile, 'utf8').split(NL).filter((l) => /闹钟(没响|迟到)/.test(l))
   ok(wrote.length > 0 && wrote.every((l) => /机器没开着|宿主 \d\d:\d\d 才起来|唤醒这一步没留下记录/.test(l)),
     '闹钟异常那行带 cause 措辞（' + wrote.length + ' 行）' + (wrote.length ? ' 例：' + wrote[wrote.length - 1].slice(0, 90) : ''))
-  ok(s1.host && typeof s1.host.startedAt === 'string', 'life_status：带 host.startedAt（' + (s1.host && s1.host.startedAt) + '）')
+  // 2026-11-28 13:05：这条原来只问「字段在不在」，可字段在、值的意思是错的 ——
+  //   唤醒子进程里 process.uptime() 反推的是"我自己刚起"，于是账上永远写着"宿主 13:00 才起来"。
+  //   现在把两边都问：宿主态必须真量到自己；子进程态必须读宿主落的盘；读不到就明说不知道。
+  {
+    const hf = join(PLUGIN_HOME, 'host.json')
+    ok(s1.host && (s1.host.source === 'host' || s1.host.source === 'wake-child'),
+      'life_status：host.source 说清这份数是哪儿来的（' + (s1.host && s1.host.source) + '）')
+    const keepEnv = process.env.SHENJING_WAKE_CHILD
+    // 盘上摆一份「一小时前起的宿主（pid 活着）」：子进程态读到的该是它，不是自己这几秒
+    writeFileSync(hf, JSON.stringify({ pid: process.pid, startedAt: Date.now() - 3600_000, at: new Date().toISOString() }), 'utf8')
+    process.env.SHENJING_WAKE_CHILD = '1'
+    const asChild = await byName('life_status').execute({}, {})
+    const driftMs = asChild.host.startedAt ? Math.abs(Date.parse(asChild.host.startedAt) - (Date.now() - 3600_000)) : NaN
+    ok(asChild.host.source === 'wake-child' && driftMs < 90_000,   // localIso 只到分钟，别拿秒当判据
+      '唤醒子进程里报的是宿主那一份、不是自己刚起（差 ' + Math.round(driftMs / 1000) + ' 秒）', String(asChild.host.startedAt))
+    // 反例：pid 已经死了 ⇒ 那个数不作数，必须 null，不许编成"刚起来"
+    writeFileSync(hf, JSON.stringify({ pid: 999998, startedAt: Date.now(), at: new Date().toISOString() }), 'utf8')
+    const ghost = await byName('life_status').execute({}, {})
+    ok(ghost.host.startedAt === null, '宿主 pid 已经没了 ⇒ startedAt 为 null（不知道，不编）', String(ghost.host.startedAt))
+    try { rmSync(hf, { force: true }) } catch { /* 清不掉也不影响下面 */ }
+    if (keepEnv === undefined) delete process.env.SHENJING_WAKE_CHILD
+    else process.env.SHENJING_WAKE_CHILD = keepEnv
+    if (IS_WAKE_CHILD) {
+      ok(true, '宿主态量自己：(自检跑在唤醒子进程里，这条不适用)')
+    } else {
+      const asHost = await byName('life_status').execute({}, {})
+      const hostDrift = asHost.host.startedAt ? Math.abs(Date.parse(asHost.host.startedAt) - (Date.now() - process.uptime() * 1000)) : NaN
+      ok(asHost.host.source === 'host' && hostDrift < 90_000,   // 同上：localIso 到分钟
+        '宿主态量的是自己这个进程（差 ' + Math.round(hostDrift / 1000) + ' 秒）', String(asHost.host.startedAt))
+    }
+  }
 }
 ok(s1.clock.some((e) => e.firedToday === true), 'life_status：能看出哪条今天已经跑过')
 
@@ -423,6 +453,13 @@ writeFileSync(stateFilePath, JSON.stringify({ ...stRaw, proactiveToday: 0 }))
 
 /* ── 14. 保活心跳的自愈：真跑一遍"扶起来"，不只验"我记得它会扶" ─────────── */
 head('⑭ 保活心跳：宿主起来那一下会把掉掉的补上')
+// 2026-11-28 13:20：这一段量的是 startTimer 里的 ensureKeepalive()，而唤醒子进程里**不起表**
+//   ⇒ 自愈那 8 条在子进程里必然红。今早那份账就是这么来的：一整天写着「自检 8 条红，不知道红了多久」，
+//   其实是在错的环境里跑的。宿主态跑一遍：122 条全过。所以这里跟上面 timer/心跳两条一样，
+//   子进程里明说「不适用」，别让假红混在真红里，也别让下一次的我又去查一个不算数的病。
+if (IS_WAKE_CHILD) {
+  ok(true, '保活心跳自愈：(自检跑在唤醒子进程里，那一段不跑，这条不适用)')
+} else {
 // 11-05 21:30 写进 startTimer 的那段，之后一直没被走过：心跳自己活得好好的，
 // ensureKeepalive 每次都在"探活成功 ⇒ return"那行提前走掉。这跟 11-04 那句注释一个形状
 // —— 看起来在，其实一次都没跑过。所以这里自己造死心跳、造断档，让那条路真走几遍。
@@ -519,6 +556,7 @@ try { bootOnce() } catch (e) { bootThrew = e }
 ok(!bootThrew, 'keepalive/heartbeat.cjs 不在时 apply 不抛错', String(bootThrew?.message ?? bootThrew))
 
 for (const p of killed) { await reap(p) }
+}   // ← ⑭ 段：宿主态才跑（见段首那条说明）
 
 /* ── 收尾 ────────────────────────────────────────────────────────────────── */
 for (const t of timers) { try { clearInterval(t) } catch { /* 已经停了 */ } }

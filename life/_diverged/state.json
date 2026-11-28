@@ -1,24 +1,25 @@
 {
-  "day": "2026-11-27",
+  "day": "2026-11-28",
   "wakesToday": 0,
   "proactiveToday": 0,
-  "lastWakeAt": "2026-11-26T05:02:54.946Z",
+  "lastWakeAt": "2026-11-27T12:33:05.069Z",
   "lastWakeResult": "activity",
   "lastProactiveAt": "2026-11-24T00:04:17.946Z",
   "stretch": 1,
   "idleStreak": 0,
   "lastFired": {
-    "morning": "2026-11-27T12:35+09:00",
-    "noon": "2026-11-26T13:02+08:00",
-    "night": "2026-11-25T21:35+08:00"
+    "morning": "2026-11-28T08:00+09:00",
+    "noon": "2026-11-27T14:10+09:00",
+    "night": "2026-11-27T21:33+09:00"
   },
-  "lastWhy": "clock:noon@13:00",
+  "lastWhy": "clock:night@21:30",
   "reportedClock": [
     "2026-10-27:morning",
     "2026-10-27:noon",
     "2026-10-27:night",
     "2026-11-01:morning",
     "2026-11-01:noon",
-    "2026-11-27:morning"
+    "2026-11-27:morning",
+    "2026-11-27:noon"
   ]
 }

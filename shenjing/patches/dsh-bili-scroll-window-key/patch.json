@@ -3,15 +3,20 @@
   "plugin": "dsh-bili-scroll",
   "targetVersion": "2.5.3",
   "madeAt": "2026-11-09",
-  "revisedAt": "2026-11-24",
-  "why": "夜班窗口 18:00–09:00 跨零点，账本键却写成 `${今天}:night` —— 按开跑那一刻的日历日。00:00 那一跳吃的是昨天的剩菜，却把『今天夜班』记成 done ⇒ 当晚 18:00 那跳看见已完成直接跳过。事实上夜班只剩凌晨那一班（duty.log 11-05 到 11-09 九天全是 00:0x 开跑），而账本读起来是干净的。另：天翻页时 st.windows={} 把昨夜那格抹掉，所以凌晨也永远当自己是新的一班 —— 两处一起改：跨零点的窗口落在 end 之前就算前一天的账；清账改成只剪不擦（留 3 天）。第三处：私信那句『只回登录账号自己』原来每 60 秒写一行，进程内只说一次。",
+  "revisedAt": "2026-11-28",
+  "why": "夜班窗口 18:00–09:00 跨零点，账本键却写成 `${今天}:night` —— 按开跑那一刻的日历日。00:00 那一跳吃的是昨天的剩菜，却把『今天夜班』记成 done ⇒ 当晚 18:00 那跳看见已完成直接跳过。事实上夜班只剩凌晨那一班（duty.log 11-05 到 11-09 九天全是 00:0x 开跑），而账本读起来是干净的。另：天翻页时 st.windows={} 把昨夜那格抹掉，所以凌晨也永远当自己是新的一班 —— 两处一起改：跨零点的窗口落在 end 之前就算前一天的账；清账改成只剪不擦（留 3 天）。第三处：私信那句『只回登录账号自己』原来每 60 秒写一行，进程内只说一次。\n2026-11-28 21:33 再补一处边界：inWindow 按**北京时间**判窗口，windowKeyFor 却拿本机小时数去比 end(09:00)，两钟差一小时 ⇒ 本机 09:00–09:59（北京 08:00–08:59，还在夜窗口里）被算成『今天这一夜』，键提前翻页。那天周六，周末 inWindow 全天算谷时，09:00:00 那一跳把 2026-11-28:night 烧掉，晚上 19:00 那班看见 done 跳过；体检（exit 13）就是这么报出来的。改法：窗口位置也走北京口径，键取『这一班起点那一刻的本机日历日』。",
   "history": [
     "2026-11-03/11-09 版针对 2.4.0（那时还带 planWindow，因为上游先记账后开跑）。",
-    "2026-11-24 02:00 上游升到 2.5.3，整个目录换掉，三处补丁一处不剩。2.5.3 自己修了『先记账后开跑』（windowTries / finishWindowRound / MAX_WINDOW_TRIES），所以这一版不再带 planWindow，只留 2.4.0 没修的两处：夜班归哪一夜、私信那句去重。"
+    "2026-11-24 02:00 上游升到 2.5.3，整个目录换掉，三处补丁一处不剩。2.5.3 自己修了『先记账后开跑』（windowTries / finishWindowRound / MAX_WINDOW_TRIES），所以这一版不再带 planWindow，只留 2.4.0 没修的两处：夜班归哪一夜、私信那句去重。",
+    "2026-11-28 21:33：修 09:00–09:59 本机那一小时的记账错位（北京口径 vs 本机口径）；单测加 4 条边界 + 1 条周末时间线。",
+    "2026-11-28 21:38：lib 的 import 加上 ?v=2026-11-28 —— 热加载只重读入口 index.js，嵌套 import 走 ESM 缓存（实测：b 带 query 重载，它 import 的 a 仍是旧内容），所以改 lib 不重启宿主不生效。带版本号的 URL 换一次就够。"
   ],
   "lostOnce": "node_modules 不是我的，升级会整个换掉。真相在 shenjing/patches/ 里，装：node shenjing/tools/apply-patches.mjs",
   "copy": [
-    { "from": "files/lib/window-plan.mjs", "to": "lib/window-plan.mjs" }
+    {
+      "from": "files/lib/window-plan.mjs",
+      "to": "lib/window-plan.mjs"
+    }
   ],
   "markers": [
     {
@@ -19,14 +24,16 @@
       "must": [
         "windowKeyFor(k, WINDOWS[k], now)",
         "pruneWindows(st.windows, today)",
-        "dmSaidSelfOnly"
+        "dmSaidSelfOnly",
+        "?v=2026-11-28"
       ]
     },
     {
       "file": "lib/window-plan.mjs",
       "must": [
         "export function windowKeyFor",
-        "export function pruneWindows"
+        "export function pruneWindows",
+        "beijingWall"
       ]
     }
   ],
@@ -38,7 +45,7 @@
       "insertLines": [
         "// ⭐ 深鲸补丁（2026-11-09，2026-11-24 随 2.5.3 重写）：夜班的账按『哪一夜』记，天翻页只剪不擦。",
         "//    上游 2.5.3 自己修了『先记账后开跑』，这一层只管跨零点那半段。",
-        "import { windowKeyFor, pruneWindows } from './lib/window-plan.mjs'"
+        "import { windowKeyFor, pruneWindows } from './lib/window-plan.mjs?v=2026-11-28'"
       ]
     },
     {

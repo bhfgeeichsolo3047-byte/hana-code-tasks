@@ -15,6 +15,12 @@
  *   node shenjing/tools/apply-patches.mjs            # 装所有缺的补丁
  *   node shenjing/tools/apply-patches.mjs --check    # 只查不装（体检风格：缺了就 exit 2）
  *   node shenjing/tools/apply-patches.mjs --force    # 已经装过也重装（改补丁后调试用）
+ *   node shenjing/tools/apply-patches.mjs --recopy   # 只重放 patch.copy 里的文件，不碰 edits
+ *
+ * ⚠️ 2026-11-28 21:33 补 --recopy：判"装没装"只看记号在不在，所以**改的是被拷贝的文件**时
+ *    （比如 lib/window-plan.mjs 里修了一行边界），记号一个不少，工具会说"已经在位"，
+ *    而盘上还是旧内容 —— 静默漂移。--force 又不能用来救这一种：它会把 edits（insertAfter /
+ *    insertBefore）再跑一遍，锚点还在 ⇒ 重复插入 ⇒ 语法当场崩。所以单独开一档只重放文件。
  *
  * 退出码：0 都装好了 / 2 有补丁没装上（锚点没了或插件不在）/ 3 只有 --check 且缺
  */
@@ -32,6 +38,7 @@ const DSH_HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
 const ARGS = process.argv.slice(2)
 const CHECK_ONLY = ARGS.includes('--check')
 const FORCE = ARGS.includes('--force')
+const RECOPY = ARGS.includes('--recopy')
 
 function findPluginDir(name) {
   // 优先 web profile；找不到就扫所有 profile（路径会变，别写死一条）
@@ -167,6 +174,38 @@ for (const id of dirs) {
   console.log(`  插件在 ${pluginDir}（版本 ${ver}，补丁针对 ${patch.targetVersion || '?'}）`)
 
   const miss = missingMarkers(pluginDir, patch)
+  // --recopy：只重放 copy 的文件（改的就是被拷贝的文件时用这个，别用 --force）
+  if (RECOPY) {
+    try {
+      for (const c of patch.copy || []) {
+        const from = join(pdir, c.from)
+        const to = join(pluginDir, c.to)
+        mkdirSync(dirname(to), { recursive: true })
+        copyFileSync(from, to)
+        console.log(`  + 重放 ${c.to}`)
+      }
+    } catch (err) {
+      console.log(`  ✗ 重放失败：${err.message}`)
+      failed++
+      continue
+    }
+    const stillMissing = missingMarkers(pluginDir, patch)
+    if (stillMissing.length) {
+      console.log('  ✗ 重放了文件，记号还是缺：' + stillMissing.map((m) => (typeof m === 'string' ? m : `${m.file}:${m.needle}`)).join('、'))
+      failed++
+      continue
+    }
+    const badCopy = (patch.copy || []).map((c) => ({ f: c.to, r: syntaxOk(pluginDir, c.to) })).find((x) => !x.r.ok)
+    if (badCopy) {
+      console.log(`  ✗ 重放了但语法不过（${badCopy.f}）：\n${badCopy.r.detail}`)
+      failed++
+      continue
+    }
+    console.log('  ✓ 文件已重放，语法检查过')
+    installed++
+    continue
+  }
+
   if (!miss.length && !FORCE) {
     console.log('  ✓ 已经在位，什么都不用做')
     already++

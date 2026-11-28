@@ -701,6 +701,11 @@ def check_heartbeats(dsh_home=None, max_age_min=None):
 # 说的就是这个位置。
 DUTY_MAX_AGE_HOURS = float(os.environ.get("SHENJING_DUTY_MAX_AGE_HOURS", "26"))
 DUTY_EARLY_HOUR = 6      # 本地 06:00 之前就把"今天的班"记成跑完 = 挤在零点
+# 夜窗口 18:00–09:00 是**北京时间**（插件 inWindow 的口径），本机 JST 就是 19:00–10:00。
+# 2026-11-28 21:36：这两条判据以前都按本机小时数硬写，跟窗口差一小时 ——
+# 18:30 就问「今晚跑了没」问早了，而 09:00–09:59 那段又是（另一个补丁里的）记账错位点。
+DUTY_NIGHT_START_LOCAL = int(os.environ.get("SHENJING_DUTY_NIGHT_START_HOUR", "19"))
+DUTY_EVENING_HOUR = DUTY_NIGHT_START_LOCAL
 
 
 def _duty_state_path(dsh_home=None):
@@ -846,25 +851,42 @@ def check_duty_silence(dsh_home=None, state_path=None, now=None, max_age_hours=N
         hits.append(("duty.log 读不了，夜班到底在几点跑，这次没量",
                      "%s —— 没量不等于没问题" % (log_path or _duty_log_path(dsh_home))))
 
-    # 今晚 18:00 那一班到底开了没有（2026-11-25 加）
+    # 今晚那一班到底开了没有（2026-11-25 加；2026-11-28 21:36 改了两处）
     # 上面那条量的是「历史全在天亮前」，这条量的是「今天该开的那班开了没有」。
-    # 只在 18:30 之后问 —— 之前问没有意义，时段还没到。
+    #
+    # ① 时刻：夜窗口写的是北京 18:00–09:00，本机（JST）就是 19:00 起。
+    #    原来按本机 18:30 就问，19:00 之前醒的那一轮会看见一条假红 —— 问早了。
+    #    现在等本机 19:30（窗口起点 + 半小时余量）再问。
+    # ② 因由：11-28 21:30 撞上的那一条，账本红着，可 duty.log 里根本没开跑。
+    #    查下来是 config.json 的 peakValley=false —— tick 第一行 `if (!cfg.peakValley) return`，
+    #    定时器每一跳都在那儿折回来。这跟「账本记错」是两件事，混在一句话里会让我下次
+    #    照着错的方向修。所以先看这个开关，关着就直说关着。
     now_dt = time.localtime(now_s)
-    evening_due = now_dt.tm_hour > 18 or (now_dt.tm_hour == 18 and now_dt.tm_min >= 30)
+    evening_due = (now_dt.tm_hour > DUTY_EVENING_HOUR
+                   or (now_dt.tm_hour == DUTY_EVENING_HOUR and now_dt.tm_min >= 30))
     if starts and evening_due and duty_cfg.get("night", True):
         today_d = time.strftime("%Y-%m-%d", now_dt)
+        night_from = DUTY_NIGHT_START_LOCAL
         tonight = [e for e in starts
                    if time.strftime("%Y-%m-%d", time.localtime(e)) == today_d
-                   and time.localtime(e).tm_hour >= 18]
+                   and time.localtime(e).tm_hour >= night_from]
         if not tonight:
             tkey = today_d + ":night"
             picks = _count_report_picks(os.path.join(
                 os.path.dirname(path), "out", today_d + ".md"))
-            hits.append((
-                "今晚 18:00 那一跳没跑：duty.log 里 %s 18:00 之后没有 window:night 开跑" % today_d,
-                "账本里 `%s` %s；state count=%s picked=%s，今天报告里挑中 %s 条、config perDay=%s"
-                % (tkey, "已经是 true" if windows.get(tkey) else "还没记",
-                   st.get("count"), st.get("picked"), picks, duty_cfg.get("perDay", "?"))))
+            if duty_cfg.get("peakValley") is False:
+                hits.append((
+                    "峰谷定时器关着（config.json peakValley=false）：今天哪一班都不会开跑",
+                    "`%s` %s；tick 第一行 `if (!cfg.peakValley) return` 就把每一跳折回去了。"
+                    "是周宇自己关的就记一句、让它红着；不是就把设置页那个开关打开。"
+                    % (tkey, "已经是 true" if windows.get(tkey) else "还没记")))
+            else:
+                hits.append((
+                    "今晚那一跳没跑：duty.log 里 %s 本机 %02d:00 之后没有 window:night 开跑"
+                    % (today_d, night_from),
+                    "账本里 `%s` %s；state count=%s picked=%s，今天报告里挑中 %s 条、config perDay=%s"
+                    % (tkey, "已经是 true" if windows.get(tkey) else "还没记",
+                       st.get("count"), st.get("picked"), picks, duty_cfg.get("perDay", "?"))))
     return hits, path
 
 
@@ -1135,6 +1157,7 @@ def main():
         ok11 = None
         ok12 = None
         ok13 = None
+        ok13b = None
         try:
             duty_dir = os.path.join(TMP_SELFTEST, "duty")
             os.makedirs(duty_dir, exist_ok=True)
@@ -1208,24 +1231,39 @@ def main():
             print("          同一份账、夜班都在 18:30 之后开跑 → %s"
                   % ("没误报" if not h_night_evening else "把对的判成错的，会天天误报"))
 
-            # 反例十三：晚上八点了，今天 18:00 那一班一个字都没有。
+            # 反例十三：晚上八点了，今天夜班那一跳一个字都没有。
             # 这条量的是「今晚该开的那班开了没有」，跟十二那条（历史形状）不是一件事。
-            fake_evening = fake_now + 6 * 3600          # 今天 19:00
+            # 2026-11-28 21:36：窗口起点是北京 18:00 = 本机 19:00，所以问的时刻挪到 20:00，
+            # 今天那份真开跑的时刻也挪到 19:42 —— 原来的 18:42 在新判据里不算当晚那班。
+            fake_evening = fake_now + 7 * 3600          # 今天 20:00
             h_missed, _ = check_duty_silence(state_path=p_clean, now=fake_evening,
                                              log_path=log_evening)
             log_today_evening = write_duty_log(
                 "duty-tonight.log",
-                [local_at(1, "18:40:00"), local_at(2, "18:31:00"), local_at(0, "18:42:00")])
+                [local_at(1, "18:40:00"), local_at(2, "18:31:00"), local_at(0, "19:42:00")])
             h_tonight, _ = check_duty_silence(state_path=p_clean, now=fake_evening,
                                               log_path=log_today_evening)
-            ok13 = any("18:00 那一跳没跑" in t for t, _ in h_missed) \
-                and not any("18:00 那一跳没跑" in t for t, _ in h_tonight)
-            print("反例十三：19:00 了、今天 18:00 那班没开 → %s"
-                  % ("报出来了" if any("18:00 那一跳没跑" in t for t, _ in h_missed)
+            ok13 = any("今晚那一跳没跑" in t for t, _ in h_missed) \
+                and not any("今晚那一跳没跑" in t for t, _ in h_tonight)
+            print("反例十三：20:00 了、今天夜班那班没开 → %s"
+                  % ("报出来了" if any("今晚那一跳没跑" in t for t, _ in h_missed)
                      else "没报，今晚该开的班没开都看不见"))
-            print("          同一时刻、今天 18:42 真开过 → %s"
-                  % ("没误报" if not any("18:00 那一跳没跑" in t for t, _ in h_tonight)
+            print("          同一时刻、今天 19:42 真开过 → %s"
+                  % ("没误报" if not any("今晚那一跳没跑" in t for t, _ in h_tonight)
                      else "把对的判成错的，会天天误报"))
+
+            # 反例十三之二（2026-11-28 21:36 加）：peakValley=false 是**另一种**红。
+            # 这条得能说出「定时器被关了」，而不是跟着喊「账本撒谎」——
+            # 它俩长得一样（今天没开跑），修法完全相反。
+            with open(os.path.join(duty_dir, "config.json"), "w", encoding="utf-8") as f:
+                json.dump({"night": True, "noon": True, "peakValley": False}, f)
+            h_off, _ = check_duty_silence(state_path=p_clean, now=fake_evening,
+                                          log_path=log_evening)
+            os.remove(os.path.join(duty_dir, "config.json"))
+            ok13b = any("峰谷定时器关着" in t for t, _ in h_off)
+            print("          同样没开跑、但 config peakValley=false → %s"
+                  % ("报出来了（说的是定时器关了）" if ok13b
+                     else "没报，开关被关了都看不见"))
         except Exception as e:
             ok11 = False
             print("反例十一：跑的时候出错了（%s：%s）" % (e.__class__.__name__, e))
@@ -1234,7 +1272,8 @@ def main():
                      and ok6 is not False and ok7 is not False
                      and ok8 is not False and ok9 is not False
                      and ok10 is not False and ok11 is not False
-                     and ok12 is not False and ok13 is not False) else 9
+                     and ok12 is not False and ok13 is not False
+                     and ok13b is not False) else 9
 
     print("历史整包 %d 份（%s … %s）" % (
         len(bundles), os.path.basename(bundles[0]), os.path.basename(bundles[-1])))
@@ -1348,13 +1387,24 @@ def main():
         print("     log 里三行 idle，读起来像我选择休息。2026-11-02 起保活心跳停了三天，同样没人说话。）")
     if duty_hits:
         code = code or 13
-        print("\n[账对不上] 该定时跑的东西，账本说跑完了、其实没跑：")
+        # 2026-11-28 21:36：这两种不是一件事，别拿同一句话盖过去。
+        #   甲 账本记了、日志里没跑 —— 账本在撒谎。
+        #   乙 定时器被关了（peakValley=false）—— 它诚实：压根没打算跑，是**机制**停了。
+        only_off = all("峰谷定时器关着" in t for t, _ in duty_hits)
+        print("\n[值班轮停了] 定时器那一层现在不跑："
+              if only_off else
+              "\n[账对不上] 该定时跑的东西，账本说跑完了、其实没跑：")
         for title, detail in duty_hits:
             print("  %s" % title)
             print("      %s" % detail)
-        print("  → 这不是「今天没动静」，是「没跑的被记成了跑完」。安静可以是选择，账对不上不是。")
-        print("     （2026-11-07 就是这样过的：00:00:35 跑 noon、00:02:35 跑 night，")
-        print("       之后十三个小时一班都没有，而 state.json 里两行都写着 true。）")
+        if only_off:
+            print("  → 这一条量的是「定时器还在不在跑」，不是「今天安静」。")
+            print("     开关是周宇的：他关的就让它红着、在 open_loops 里记一句；")
+            print("     没人认领就把设置页的峰谷开关打开。别自己伸手改他的开关。")
+        else:
+            print("  → 这不是「今天没动静」，是「没跑的被记成了跑完」。安静可以是选择，账对不上不是。")
+            print("     （2026-11-07 就是这样过的：00:00:35 跑 noon、00:02:35 跑 night，")
+            print("       之后十三个小时一班都没有，而 state.json 里两行都写着 true。）")
         print("     账在 %s" % duty_where)
     if code == 0:
         # 2026-10-29 加：**"没反例"和"没证据"必须分开。**
